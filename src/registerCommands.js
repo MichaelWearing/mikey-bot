@@ -5,6 +5,7 @@ import * as summaryCommand from "./commands/summary.js";
 import * as feedbackCommand from "./commands/feedback.js";
 import * as startTrackingLiveCommand from "./commands/startTrackingLive.js";
 import * as stopTrackingLiveCommand from "./commands/stopTrackingLive.js";
+import * as givePersonalFeedbackToAllCommand from "./commands/givePersonalFeedbackToAll.js";
 
 const commands = [
   analyzeCommand.data.toJSON(),
@@ -12,6 +13,7 @@ const commands = [
   feedbackCommand.data.toJSON(),
   startTrackingLiveCommand.data.toJSON(),
   stopTrackingLiveCommand.data.toJSON(),
+  givePersonalFeedbackToAllCommand.data.toJSON(),
 ];
 
 const rest = new REST().setToken(process.env.DISCORD_BOT_TOKEN);

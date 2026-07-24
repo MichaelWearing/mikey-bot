@@ -5,6 +5,7 @@ import * as summaryCommand from "./commands/summary.js";
 import * as feedbackCommand from "./commands/feedback.js";
 import * as startTrackingLiveCommand from "./commands/startTrackingLive.js";
 import * as stopTrackingLiveCommand from "./commands/stopTrackingLive.js";
+import * as givePersonalFeedbackToAllCommand from "./commands/givePersonalFeedbackToAll.js";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -15,6 +16,7 @@ for (const cmd of [
   feedbackCommand,
   startTrackingLiveCommand,
   stopTrackingLiveCommand,
+  givePersonalFeedbackToAllCommand,
 ]) {
   client.commands.set(cmd.data.name, cmd);
 }
