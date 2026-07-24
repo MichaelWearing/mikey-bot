@@ -1,0 +1,17 @@
+{
+  "name": "discord-log-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "register-commands": "node src/registerCommands.js",
+    "test-wcl": "node src/lib/testWcl.js",
+    "test-analyze": "node src/lib/testAnalyze.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  }
+}
