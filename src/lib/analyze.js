@@ -74,7 +74,7 @@ function annotateDeaths(deaths, isWipe) {
   });
 }
 
-const WIPE_DEATH_TALLY_CAP = 5; // a wipe is already lost past this point — don't count the pile-on
+const WIPE_DEATH_TALLY_CAP = 3; // a wipe is already lost past this point — don't count the pile-on
 
 // Shared by /summary and /feedback so both apply the exact same "pull was already
 // over" cutoff when tallying per-player stats from a wipe.

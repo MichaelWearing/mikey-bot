@@ -1,8 +1,17 @@
+// Explicit current-tier consumables, categorized for display. Extend these as the
+// tier changes — provide the exact ability name as it appears in the log.
+const HEALTH_CONSUMABLE_NAMES = new Set([
+  "Healthstone", "Silvermoon Health Potion", "Healing Potion", "Draenic Healing Potion", "Algari Healing Potion",
+]);
+const DPS_CONSUMABLE_NAMES = new Set(["Potion of Recklessness", "Light's Potential"]);
+const MANA_CONSUMABLE_NAMES = new Set(["Lightfused Mana Potion", "Potion of Devoured Dreams"]);
+
 // Ability names that count as "used a defensive" when cast shortly before a death.
-// Not exhaustive — extend as you notice gaps in real reports.
+// Includes every health consumable (drinking a health pot to survive counts), but
+// not DPS/mana potions — those don't help you live. Not exhaustive beyond that —
+// extend as you notice gaps in real reports.
 export const DEFENSIVE_ABILITY_NAMES = new Set([
-  // Universal
-  "Healthstone", "Healing Potion", "Draenic Healing Potion", "Algari Healing Potion",
+  ...HEALTH_CONSUMABLE_NAMES,
   // Warrior
   "Shield Wall", "Last Stand", "Die by the Sword", "Spell Reflection", "Rallying Cry",
   // Paladin
@@ -30,14 +39,6 @@ export const DEFENSIVE_ABILITY_NAMES = new Set([
   // Evoker
   "Obsidian Scales", "Renewing Blaze", "Rewind", "Zephyr",
 ]);
-
-// Explicit current-tier consumables, categorized for display. Extend these as the
-// tier changes — provide the exact ability name as it appears in the log.
-const HEALTH_CONSUMABLE_NAMES = new Set([
-  "Healthstone", "Silvermoon Health Potion", "Healing Potion", "Draenic Healing Potion", "Algari Healing Potion",
-]);
-const DPS_CONSUMABLE_NAMES = new Set(["Potion of Recklessness", "Light's Potential"]);
-const MANA_CONSUMABLE_NAMES = new Set(["Lightfused Mana Potion", "Potion of Devoured Dreams"]);
 
 // Falls back to name pattern matching for anything not in the explicit lists above.
 export function isConsumableAbility(abilityName) {

@@ -35,13 +35,6 @@ function classEmoji(className) {
   return CLASS_EMOJI[className] ?? "❔";
 }
 
-const CONSUMABLE_CATEGORY_EMOJI = {
-  health: "🔴",
-  dps: "⚔️",
-  mana: "💧",
-  other: "🧪",
-};
-
 // "3rd to die" -> "2 others already dead", so every death line makes clear how
 // far into the pull's chaos this particular death landed.
 function deathPositionNote(deathNumber) {
@@ -50,7 +43,7 @@ function deathPositionNote(deathNumber) {
   return `${others} other${others === 1 ? "" : "s"} already dead`;
 }
 
-const MAX_WIPE_DEATHS_SHOWN = 5;
+const MAX_WIPE_DEATHS_SHOWN = 3;
 const MAX_KILL_DEATHS_SHOWN = 10; // safety ceiling only — kills rarely have many deaths
 const FIELD_VALUE_LIMIT = 1024;
 
@@ -220,13 +213,21 @@ function parseColor(rankPercent) {
   return ANSI.red;
 }
 
+const CONSUMABLE_CATEGORY_LABELS = {
+  health: "🔴 Health Potions & Stones",
+  dps: "⚔️ DPS Potions",
+  mana: "💧 Mana Potions",
+  other: "🧪 Other Consumables",
+};
+const CONSUMABLE_CATEGORY_ORDER = ["health", "dps", "mana", "other"];
+
 export function buildPlayerFeedbackEmbed(feedback) {
   const embed = new EmbedBuilder()
     .setColor(0x1abc9c)
     .setTitle(`📋 Personal Report — ${feedback.playerNames.join(" & ")}`)
     .setURL(`https://www.warcraftlogs.com/reports/${feedback.reportCode}`)
     .setDescription(
-      `${feedback.title}\n${feedback.kills.length} kills, ${feedback.deaths.length} deaths` +
+      `${feedback.title}\n${feedback.totalKillPulls} kills, ${feedback.totalWipePulls} wipes, ${feedback.deaths.length} death${feedback.deaths.length === 1 ? "" : "s"}` +
         (feedback.avgParse !== null ? ` — avg parse ${feedback.avgParse.toFixed(0)}%` : "")
     );
 
@@ -269,7 +270,7 @@ export function buildPlayerFeedbackEmbed(feedback) {
     );
     embed.addFields({
       name: `🎯 Interrupts (${feedback.interrupts.length})`,
-      value: "```ansi\n" + lines.join("\n") + "\n```",
+      value: "```ansi\n" + lines.join("\n\n") + "\n```",
       inline: true,
     });
   } else {
@@ -280,27 +281,40 @@ export function buildPlayerFeedbackEmbed(feedback) {
     const lines = feedback.defensivesUsed.map(
       (d) => `${classEmoji(d.characterClass)} ${d.characterName}${ANSI.reset}: ${ANSI.green}${d.name}${ANSI.reset} x${d.count}`
     );
-    embed.addFields({ name: "🛡️ Defensives Used", value: "```ansi\n" + lines.join("\n") + "\n```", inline: true });
+    embed.addFields({ name: "🛡️ Defensives Used", value: "```ansi\n" + lines.join("\n\n") + "\n```", inline: true });
   } else {
     embed.addFields({ name: "🛡️ Defensives Used", value: "None used all night", inline: true });
   }
 
   if (feedback.consumables.length > 0) {
-    const lines = feedback.consumables.map(
-      (c) => `${CONSUMABLE_CATEGORY_EMOJI[c.category] ?? "🧪"} ${classEmoji(c.characterClass)} ${c.characterName}${ANSI.reset}: ${ANSI.green}${c.name}${ANSI.reset} x${c.count}`
-    );
-    embed.addFields({ name: "🧪 Consumables Used", value: "```ansi\n" + lines.join("\n") + "\n```", inline: true });
+    const byCategory = new Map();
+    for (const c of feedback.consumables) {
+      if (!byCategory.has(c.category)) byCategory.set(c.category, []);
+      byCategory.get(c.category).push(c);
+    }
+    for (const category of CONSUMABLE_CATEGORY_ORDER) {
+      const entries = byCategory.get(category);
+      if (!entries || entries.length === 0) continue;
+      const lines = entries.map(
+        (c) => `${classEmoji(c.characterClass)} ${c.characterName}${ANSI.reset}: ${ANSI.green}${c.name}${ANSI.reset} x${c.count}`
+      );
+      embed.addFields({
+        name: CONSUMABLE_CATEGORY_LABELS[category],
+        value: "```ansi\n" + lines.join("\n\n") + "\n```",
+        inline: true,
+      });
+    }
   } else {
     embed.addFields({ name: "🧪 Consumables Used", value: "None used all night", inline: true });
   }
 
   if (feedback.externalsGiven.length > 0) {
-    const shown = feedback.externalsGiven.slice(0, 15);
+    const shown = feedback.externalsGiven.slice(0, 8);
     const lines = shown.map(
       (e) =>
         `${classEmoji(e.characterClass)} ${e.characterName}${ANSI.reset}: ${ANSI.cyan}${e.ability}${ANSI.reset} → ${e.targetName} (Pull #${e.pullNumber})`
     );
-    let value = "```ansi\n" + lines.join("\n") + "\n```";
+    let value = "```ansi\n" + lines.join("\n\n") + "\n```";
     if (feedback.externalsGiven.length > shown.length) {
       value += `\n*+${feedback.externalsGiven.length - shown.length} more*`;
     }

@@ -157,6 +157,8 @@ export function buildPlayerFeedback(analysis, playerNames) {
     title: analysis.title,
     reportCode: analysis.reportCode,
     playerNames,
+    totalKillPulls: analysis.pulls.filter((p) => p.kill).length,
+    totalWipePulls: analysis.pulls.filter((p) => !p.kill).length,
     deaths,
     kills,
     avgParse,
