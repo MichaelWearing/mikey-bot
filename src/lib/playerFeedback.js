@@ -95,6 +95,7 @@ export function buildPlayerFeedback(analysis, playerNames) {
         pullNumber: pull.pullNumber,
         bossName: pull.bossName,
         interruptedAbility: i.interruptedAbility,
+        viaPet: i.viaPet,
       });
     }
 

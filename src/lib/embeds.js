@@ -255,18 +255,21 @@ export function buildPlayerFeedbackEmbed(feedback) {
   if (feedback.interrupts.length > 0) {
     const byCharacterAbility = new Map();
     for (const i of feedback.interrupts) {
-      const key = `${i.characterName}::${i.interruptedAbility}`;
+      const key = `${i.characterName}::${i.interruptedAbility}::${i.viaPet}`;
       const entry = byCharacterAbility.get(key) ?? {
         characterName: i.characterName,
         characterClass: i.characterClass,
         ability: i.interruptedAbility,
+        viaPet: i.viaPet,
         count: 0,
       };
       entry.count += 1;
       byCharacterAbility.set(key, entry);
     }
     const lines = [...byCharacterAbility.values()].map(
-      (e) => `${classEmoji(e.characterClass)} ${e.characterName}${ANSI.reset}: ${ANSI.cyan}${e.ability}${ANSI.reset} x${e.count}`
+      (e) =>
+        `${classEmoji(e.characterClass)} ${e.characterName}${ANSI.reset}: ${ANSI.cyan}${e.ability}${ANSI.reset} x${e.count}` +
+        (e.viaPet ? `${ANSI.gray} (via pet)${ANSI.reset}` : "")
     );
     embed.addFields({
       name: `🎯 Interrupts (${feedback.interrupts.length})`,

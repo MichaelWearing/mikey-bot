@@ -18,7 +18,7 @@ const REPORT_QUERY = `
           endTime
         }
         masterData {
-          actors { id name type subType }
+          actors { id name type subType petOwner }
           abilities { gameID name }
         }
       }
@@ -112,13 +112,25 @@ export async function analyzeReport(code) {
     });
 
     const interrupts = (reportDetail.interrupts?.data ?? []).map((i) => {
-      const source = actorsById.get(i.sourceID);
+      // Pet interrupts (Warlock Felhunter's Spell Lock, etc.) show up in the log
+      // under the pet's own actor, not the player's — resolve back to the owner
+      // so a Warlock's pet kicks actually count toward their interrupt total.
+      let source = actorsById.get(i.sourceID);
+      let viaPet = false;
+      if (source?.type === "Pet" && source.petOwner != null) {
+        const owner = actorsById.get(source.petOwner);
+        if (owner) {
+          source = owner;
+          viaPet = true;
+        }
+      }
       return {
         sourceName: source?.name ?? null,
         sourceClass: source?.subType ?? null,
         interruptAbility: abilitiesById.get(i.abilityGameID) ?? "Unknown",
         interruptedAbility: abilitiesById.get(i.extraAbilityGameID) ?? "Unknown",
         timestamp: i.timestamp,
+        viaPet,
       };
     });
 
