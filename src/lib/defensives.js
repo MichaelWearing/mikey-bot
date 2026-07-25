@@ -1,3 +1,5 @@
+import { CLASS_SPECS } from "./classRegistry.js";
+
 // Explicit current-tier consumables, categorized for display. Extend these as the
 // tier changes — provide the exact ability name as it appears in the log.
 const HEALTH_CONSUMABLE_NAMES = new Set([
@@ -8,37 +10,11 @@ const MANA_CONSUMABLE_NAMES = new Set(["Lightfused Mana Potion", "Potion of Devo
 
 // Ability names that count as "used a defensive" when cast shortly before a death.
 // Includes every health consumable (drinking a health pot to survive counts), but
-// not DPS/mana potions — those don't help you live. Not exhaustive beyond that —
-// extend as you notice gaps in real reports.
-export const DEFENSIVE_ABILITY_NAMES = new Set([
-  ...HEALTH_CONSUMABLE_NAMES,
-  // Warrior
-  "Shield Wall", "Last Stand", "Die by the Sword", "Spell Reflection", "Rallying Cry",
-  // Paladin
-  "Divine Shield", "Divine Protection", "Ardent Defender", "Guardian of Ancient Kings", "Blessing of Protection", "Blessing of Sacrifice", "Lay on Hands",
-  // Death Knight
-  "Icebound Fortitude", "Anti-Magic Shell", "Vampiric Blood", "Death Strike", "Lichborne",
-  // Druid
-  "Barkskin", "Survival Instincts", "Ironbark",
-  // Monk
-  "Fortifying Brew", "Diffuse Magic", "Touch of Karma", "Zen Meditation", "Life Cocoon",
-  // Warlock
-  "Unending Resolve", "Dark Pact", "Demonic Circle: Teleport",
-  // Priest
-  "Pain Suppression", "Guardian Spirit", "Desperate Prayer", "Fade", "Power Word: Shield",
-  // Shaman
-  "Astral Shift", "Shamanistic Rage", "Spirit Link Totem",
-  // Mage
-  "Ice Block", "Alter Time", "Mass Barrier", "Prismatic Barrier",
-  // Rogue
-  "Cloak of Shadows", "Evasion", "Feint", "Crimson Vial",
-  // Hunter
-  "Aspect of the Turtle", "Exhilaration",
-  // Demon Hunter
-  "Blur", "Darkness", "Netherwalk",
-  // Evoker
-  "Obsidian Scales", "Renewing Blaze", "Rewind", "Zephyr",
-]);
+// not DPS/mana potions — those don't help you live. The class abilities themselves
+// come from src/lib/classes/*.js (per-class, per-spec) via classRegistry.js — edit
+// those files (or use /list-defensives to review them) rather than this list directly.
+const ALL_CLASS_DEFENSIVES = Object.values(CLASS_SPECS).flatMap((specs) => Object.values(specs).flat());
+export const DEFENSIVE_ABILITY_NAMES = new Set([...HEALTH_CONSUMABLE_NAMES, ...ALL_CLASS_DEFENSIVES]);
 
 // Falls back to name pattern matching for anything not in the explicit lists above.
 export function isConsumableAbility(abilityName) {
@@ -63,7 +39,8 @@ export function consumableCategory(abilityName) {
 export const EXTERNAL_ABILITY_NAMES = new Set([
   "Pain Suppression", "Guardian Spirit",
   "Blessing of Protection", "Blessing of Sacrifice", "Lay on Hands",
-  "Ironbark", "Life Cocoon",
+  "Ironbark", "Life Cocoon", "Survival of the Fittest",
+  "Darkness", // Devourer DH only (custom content) — confirmed dual-purpose
 ]);
 
 export function findDefensiveBeforeDeath(casts, actorId, deathTimestamp, windowMs = 10000) {

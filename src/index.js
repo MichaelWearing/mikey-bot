@@ -6,6 +6,7 @@ import * as feedbackCommand from "./commands/feedback.js";
 import * as startTrackingLiveCommand from "./commands/startTrackingLive.js";
 import * as stopTrackingLiveCommand from "./commands/stopTrackingLive.js";
 import * as givePersonalFeedbackToAllCommand from "./commands/givePersonalFeedbackToAll.js";
+import * as listDefensivesCommand from "./commands/listDefensives.js";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -17,6 +18,7 @@ for (const cmd of [
   startTrackingLiveCommand,
   stopTrackingLiveCommand,
   givePersonalFeedbackToAllCommand,
+  listDefensivesCommand,
 ]) {
   client.commands.set(cmd.data.name, cmd);
 }
@@ -35,6 +37,18 @@ const allowedUserIds = new Set(
 );
 
 client.on("interactionCreate", async (interaction) => {
+  if (interaction.isAutocomplete()) {
+    if (!allowedUserIds.has(interaction.user.id)) return;
+    const command = client.commands.get(interaction.commandName);
+    if (!command?.autocomplete) return;
+    try {
+      await command.autocomplete(interaction);
+    } catch (err) {
+      console.error(`Error in autocomplete for ${interaction.commandName}:`, err);
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   if (!allowedUserIds.has(interaction.user.id)) {
