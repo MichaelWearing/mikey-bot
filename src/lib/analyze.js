@@ -12,6 +12,7 @@ const REPORT_QUERY = `
           name
           kill
           difficulty
+          keystoneLevel
           fightPercentage
           bossPercentage
           startTime
@@ -82,7 +83,7 @@ export function cappedDeathsForTally(pull, cap = WIPE_DEATH_TALLY_CAP) {
   return pull.kill ? pull.deaths : pull.deaths.slice(0, cap);
 }
 
-export async function analyzeReport(code) {
+async function analyzeSingleReport(code) {
   const base = await wclQuery(REPORT_QUERY, { code });
   const report = base.reportData.report;
   if (!report) {
@@ -92,7 +93,10 @@ export async function analyzeReport(code) {
   const actorsById = new Map(report.masterData.actors.map((a) => [a.id, a]));
   const abilitiesById = new Map(report.masterData.abilities.map((a) => [a.gameID, a.name]));
 
-  const pulls = report.fights.filter((f) => f.kill !== null);
+  // keystoneLevel is only set on Mythic+ dungeon pulls — this is a raid analysis
+  // tool, so leave dungeon content (and any non-encounter trash segments) out of
+  // every downstream count entirely, rather than filtering it per-display later.
+  const pulls = report.fights.filter((f) => f.kill !== null && f.keystoneLevel == null);
 
   const results = [];
   for (const fight of pulls) {
@@ -186,6 +190,11 @@ export async function analyzeReport(code) {
       bossName: fight.name,
       kill: fight.kill,
       pullNumber: pulls.indexOf(fight) + 1,
+      // Fight start/end are relative offsets from the report's own start — convert to
+      // absolute wall-clock time so pulls from different reports can be compared when
+      // merging multiple logs of the same night (see mergeReports below).
+      absoluteStartTime: report.startTime + fight.startTime,
+      absoluteEndTime: report.startTime + fight.endTime,
       durationMs: fight.endTime - fight.startTime,
       durationClock: msToClock(fight.endTime - fight.startTime),
       bossPercentRemaining: fight.bossPercentage,
@@ -202,5 +211,69 @@ export async function analyzeReport(code) {
     title: report.title,
     reportCode: code,
     pulls: results,
+  };
+}
+
+const PULL_DEDUP_TOLERANCE_MS = 5000; // same boss/outcome starting within a few seconds
+// across two logs is almost certainly the same real pull, captured twice.
+
+// Merges pulls from multiple reports of the same raid night into one chronological
+// list, dropping pulls that are clearly the same real attempt logged twice (e.g. two
+// people both ran a logging addon). Pulls that don't overlap in time are just two
+// different parts of the same night and are kept as-is.
+function mergeReports(reports) {
+  const allPulls = reports.flatMap((r) => r.pulls);
+  allPulls.sort((a, b) => a.absoluteStartTime - b.absoluteStartTime);
+
+  const deduped = [];
+  let duplicatesDropped = 0;
+  for (const pull of allPulls) {
+    const isDuplicate = deduped.some(
+      (kept) =>
+        kept.bossName === pull.bossName &&
+        kept.kill === pull.kill &&
+        Math.abs(kept.absoluteStartTime - pull.absoluteStartTime) <= PULL_DEDUP_TOLERANCE_MS
+    );
+    if (isDuplicate) {
+      duplicatesDropped += 1;
+    } else {
+      deduped.push(pull);
+    }
+  }
+
+  deduped.forEach((pull, i) => {
+    pull.pullNumber = i + 1;
+  });
+
+  return { pulls: deduped, duplicatesDropped };
+}
+
+// Accepts either a single WCL report code, or several comma-separated codes when a
+// night got logged across multiple reports (crashed logging tool, two people both
+// running the addon, etc.). Multiple reports are merged into one chronological pull
+// list with duplicate pulls collapsed — see mergeReports.
+export async function analyzeReport(codeOrCodes) {
+  const codes = codeOrCodes
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean);
+
+  if (codes.length === 1) {
+    const { title, reportCode, pulls } = await analyzeSingleReport(codes[0]);
+    return { title, reportCode, reportCodes: [reportCode], duplicatesDropped: 0, pulls };
+  }
+
+  const reports = [];
+  for (const code of codes) {
+    reports.push(await analyzeSingleReport(code));
+  }
+  const { pulls, duplicatesDropped } = mergeReports(reports);
+
+  return {
+    title: reports[0].title,
+    reportCode: reports[0].reportCode,
+    reportCodes: codes,
+    duplicatesDropped,
+    pulls,
   };
 }

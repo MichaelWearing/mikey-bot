@@ -10,7 +10,7 @@ export const data = new SlashCommandBuilder()
   .addStringOption((opt) =>
     opt
       .setName("report")
-      .setDescription("Report ID or Warcraft Logs URL")
+      .setDescription("Report ID or WCL URL (comma-separate multiple if the night spans several logs)")
       .setRequired(true)
   )
   .addStringOption((opt) =>

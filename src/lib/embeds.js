@@ -3,6 +3,17 @@ import { EmbedBuilder } from "discord.js";
 const WIPE_COLOR = 0xe74c3c;
 const KILL_COLOR = 0x2ecc71;
 
+// Appended to a description when multiple WCL reports were combined for one night —
+// e.g. two people both ran a logging addon, or a crash split the night in two.
+function combinedReportsNote(reportCodes, duplicatesDropped) {
+  if (!reportCodes || reportCodes.length <= 1) return "";
+  let note = `\nCombined ${reportCodes.length} logs`;
+  if (duplicatesDropped > 0) {
+    note += ` — merged ${duplicatesDropped} duplicate pull${duplicatesDropped === 1 ? "" : "s"}`;
+  }
+  return note + ".";
+}
+
 // Discord renders these inside ```ansi code blocks as real colored/bold text.
 const ESC = String.fromCharCode(27);
 const ANSI = {
@@ -15,7 +26,7 @@ const ANSI = {
   gray: `${ESC}[2;37m`,
 };
 
-const CLASS_EMOJI = {
+export const CLASS_EMOJI = {
   Warrior: "⚔️",
   Paladin: "🛡️",
   Hunter: "🏹",
@@ -146,8 +157,14 @@ export function buildSummaryEmbed(summary) {
     .setTitle(`🌙 Night Summary — ${summary.title}`)
     .setURL(`https://www.warcraftlogs.com/reports/${summary.reportCode}`)
     .setDescription(
-      `${summary.totalPulls} pulls, ${summary.totalKills} kills — avg ${summary.avgDeaths.toFixed(1)} deaths/player`
+      `${summary.totalPulls} pulls, ${summary.totalKills} kills — avg ${summary.avgDeaths.toFixed(1)} deaths/player` +
+        combinedReportsNote(summary.reportCodes, summary.duplicatesDropped)
     );
+
+  if (summary.bossesSummary.length > 0) {
+    const lines = summary.bossesSummary.map((b) => (b.killed ? `✅ ${b.bossName}` : `💀 ${b.bossName} (not killed)`));
+    embed.addFields({ name: "🐲 Bosses", value: lines.join("\n") });
+  }
 
   addSummaryField(embed, "💀 Most Deaths", summary.mostDeaths, (p) =>
     summaryLine(p, `${p.totalDeaths} death${p.totalDeaths === 1 ? "" : "s"}`, ANSI.red)
@@ -170,17 +187,20 @@ export function buildSummaryEmbed(summary) {
   );
   addSummaryField(
     embed,
-    "🛡️ Died With Defensive Up",
-    summary.diedWithDefensiveUp,
-    (p) => summaryLine(p, `${Math.round((p.defensiveUsedCount / p.totalDeaths) * 100)}% of deaths`, ANSI.green),
-    { caveat: "only counts what was up at the moment they died" }
-  );
-  addSummaryField(
-    embed,
     "⚠️ Died With Nothing Up",
     summary.diedWithNothingUp,
     (p) => summaryLine(p, `${Math.round((p.defensiveUsedCount / p.totalDeaths) * 100)}% of deaths`, ANSI.red),
     { caveat: "only counts what was up at the moment they died" }
+  );
+  addSummaryField(embed, "🎯 Most Interrupts", summary.mostInterrupts, (p) =>
+    summaryLine(p, `${p.interruptCount} kick${p.interruptCount === 1 ? "" : "s"}` + (p.interruptViaPetCount > 0 ? ` (${p.interruptViaPetCount} via pet)` : ""), ANSI.cyan)
+  );
+  addSummaryField(
+    embed,
+    "🧪 No DPS Potions",
+    summary.noDpsPotions,
+    (p) => summaryLine(p, `0 across ${p.parsePercents.length} kill${p.parsePercents.length === 1 ? "" : "s"}`, ANSI.yellow),
+    { caveat: "free parse left on the table" }
   );
 
   if (embed.data.fields === undefined || embed.data.fields.length === 0) {
@@ -228,8 +248,17 @@ export function buildPlayerFeedbackEmbed(feedback) {
     .setURL(`https://www.warcraftlogs.com/reports/${feedback.reportCode}`)
     .setDescription(
       `${feedback.title}\n${feedback.totalKillPulls} kills, ${feedback.totalWipePulls} wipes, ${feedback.deaths.length} death${feedback.deaths.length === 1 ? "" : "s"}` +
-        (feedback.avgParse !== null ? ` — avg parse ${feedback.avgParse.toFixed(0)}%` : "")
+        (feedback.avgParse !== null ? ` — avg parse ${feedback.avgParse.toFixed(0)}%` : "") +
+        combinedReportsNote(feedback.reportCodes, feedback.duplicatesDropped)
     );
+
+  if (feedback.bossesSummary.length > 0) {
+    const lines = feedback.bossesSummary.map((b) => {
+      if (!b.attended) return `⬜ ${b.bossName} (missed — raid ${b.killed ? "killed it" : "didn't kill it"})`;
+      return b.killed ? `✅ ${b.bossName}` : `💀 ${b.bossName} (wiped)`;
+    });
+    embed.addFields({ name: "🐲 Bosses", value: lines.join("\n") });
+  }
 
   embed.addFields({ name: "📝 Night Verdict", value: feedback.verdict });
 
@@ -358,7 +387,7 @@ export function buildReportEmbeds(analysis) {
     .setColor(0x3498db)
     .setTitle(`Raid Log Analysis — ${analysis.title}`)
     .setURL(`https://www.warcraftlogs.com/reports/${analysis.reportCode}`)
-    .setDescription(`${analysis.pulls.length} pulls analyzed`);
+    .setDescription(`${analysis.pulls.length} pulls analyzed` + combinedReportsNote(analysis.reportCodes, analysis.duplicatesDropped));
 
   const pullEmbeds = analysis.pulls.map(buildPullEmbed);
   return [header, ...pullEmbeds];

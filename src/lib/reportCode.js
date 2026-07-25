@@ -1,6 +1,14 @@
+// Handles a single URL/code, or several comma-separated ones (for a night that got
+// logged across multiple WCL reports) — each part is resolved independently, then
+// rejoined so analyzeReport() can split on commas and fetch them all.
 export function extractReportCode(input) {
-  const trimmed = input.trim();
-  const urlMatch = trimmed.match(/reports\/([a-zA-Z0-9]+)/);
-  if (urlMatch) return urlMatch[1];
-  return trimmed;
+  return input
+    .split(",")
+    .map((part) => {
+      const trimmed = part.trim();
+      const urlMatch = trimmed.match(/reports\/([a-zA-Z0-9]+)/);
+      return urlMatch ? urlMatch[1] : trimmed;
+    })
+    .filter(Boolean)
+    .join(",");
 }
