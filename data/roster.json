@@ -17,14 +17,22 @@
     ]
   },
   { "names": ["Msvv"], "channelName": "msv", "characters": [{ "name": "Msvv", "class": "Rogue", "spec": "Subtlety" }] },
-  { "names": ["Pynky"], "channelName": "officer", "characters": [{ "name": "Pynky", "class": "Hunter", "spec": "Survival" }] },
+  { "names": ["Pynky"], "channelName": "pynky", "characters": [{ "name": "Pynky", "class": "Hunter", "spec": "BeastMastery" }] },
   { "names": ["Lutziehdk"], "channelName": "lucy", "characters": [{ "name": "Lutziehdk", "class": "DeathKnight", "spec": "Unholy" }] },
   { "names": ["Thronehobo"], "channelName": "throne", "characters": [{ "name": "Thronehobo", "class": "Shaman", "spec": "Elemental" }] },
   { "names": ["Öc"], "channelName": "oc", "characters": [{ "name": "Öc", "class": "Warrior", "spec": "Fury" }] },
   { "names": ["Krepowl"], "channelName": "krepo", "characters": [{ "name": "Krepowl", "class": "Druid", "spec": "Balance" }] },
   { "names": ["Nèèko"], "channelName": "neeko", "characters": [{ "name": "Nèèko", "class": "Paladin", "spec": "Retribution" }] },
   { "names": ["Pàzdh"], "channelName": "paz", "characters": [{ "name": "Pàzdh", "class": "DemonHunter", "spec": "Devourer" }] },
-  { "names": ["Katawoke"], "channelName": "kata", "characters": [{ "name": "Katawoke", "class": "Evoker", "spec": "Augmentation" }] },
+  {
+    "names": ["Katawoke", "Kataxy", "Katashame"],
+    "channelName": "kata",
+    "characters": [
+      { "name": "Katawoke", "class": "Evoker", "spec": "Augmentation" },
+      { "name": "Kataxy", "class": "Priest", "spec": "Shadow" },
+      { "name": "Katashame", "class": "Shaman", "spec": "Elemental" }
+    ]
+  },
   { "names": ["Clottbott"], "channelName": "clott", "characters": [{ "name": "Clottbott", "class": "Warlock", "spec": "Affliction" }] },
   { "names": ["Tkpmage"], "channelName": "tkp", "characters": [{ "name": "Tkpmage", "class": "Mage", "spec": "Fire" }] },
   { "names": ["Capitanfade"], "channelName": "fade", "characters": [{ "name": "Capitanfade", "class": "Mage", "spec": "Frost" }] },
