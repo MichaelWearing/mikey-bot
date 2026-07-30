@@ -198,7 +198,7 @@ async function analyzeSingleReport(code) {
     // Raid-wide class buffs (Arcane Intellect, Battle Shout, etc.) — only worth
     // flagging on pulls long enough to matter, and only attributed to whoever's
     // actually present and capable of providing that buff this pull.
-    const MIN_PULL_DURATION_FOR_BUFF_CHECK_MS = 120000;
+    const MIN_PULL_DURATION_FOR_BUFF_CHECK_MS = 60000;
     const buffGaps = [];
     if (fight.endTime - fight.startTime >= MIN_PULL_DURATION_FOR_BUFF_CHECK_MS) {
       const missingPlayersByBuff = new Map();

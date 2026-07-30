@@ -230,7 +230,12 @@ export function buildSummaryEmbed(summary) {
     embed,
     "⚠️ Died With Nothing Up",
     summary.diedWithNothingUp,
-    (p) => summaryLine(p, `${Math.round((p.defensiveUsedCount / p.totalDeaths) * 100)}% of deaths`, ANSI.red),
+    (p) =>
+      summaryLine(
+        p,
+        `${Math.round((p.defensiveUsedCount / p.totalDeaths) * 100)}% of deaths (${p.totalDeaths} death${p.totalDeaths === 1 ? "" : "s"})`,
+        ANSI.red
+      ),
     { caveat: "only counts what was up at the moment they died" }
   );
   addSummaryField(embed, "🎯 Most Interrupts", summary.mostInterrupts, (p) =>
@@ -240,8 +245,21 @@ export function buildSummaryEmbed(summary) {
     embed,
     "🧪 No DPS Potions",
     summary.noDpsPotions,
-    (p) => summaryLine(p, `0 across ${p.parsePercents.length} kill${p.parsePercents.length === 1 ? "" : "s"}`, ANSI.yellow),
+    (p) => summaryLine(p, `0 across ${p.attendedPulls} pull${p.attendedPulls === 1 ? "" : "s"}`, ANSI.yellow),
     { caveat: "free parse left on the table" }
+  );
+  addSummaryField(embed, "🛡️ Most Defensives Used", summary.mostDefensivesUsed, (p) =>
+    summaryLine(p, `${p.defensiveCastCount}x`, ANSI.green)
+  );
+  addSummaryField(
+    embed,
+    "🚫 Least Defensives Used",
+    summary.leastDefensivesUsed,
+    (p) => summaryLine(p, `0 across ${p.attendedPulls} pull${p.attendedPulls === 1 ? "" : "s"}`, ANSI.red),
+    { caveat: "personal defensives/self-heals only, not externals given to others" }
+  );
+  addSummaryField(embed, "💙 Most Externals Given", summary.mostExternalsGiven, (p) =>
+    summaryLine(p, `${p.externalsGivenCount}x`, ANSI.cyan)
   );
   addSummaryField(
     embed,

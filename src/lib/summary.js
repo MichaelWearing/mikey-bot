@@ -1,5 +1,5 @@
 import { cappedDeathsForTally } from "./analyze.js";
-import { isConsumableAbility, consumableCategory } from "./defensives.js";
+import { classifyCast } from "./defensives.js";
 
 function getPlayer(players, name, classHint) {
   if (!players.has(name)) {
@@ -15,6 +15,9 @@ function getPlayer(players, name, classHint) {
       interruptCount: 0,
       interruptViaPetCount: 0,
       dpsPotionCount: 0,
+      defensiveCastCount: 0,
+      externalsGivenCount: 0,
+      attendedPulls: 0,
       firstPrepCheck: null,
       lastPrepCheck: null,
       missingFlaskPulls: [],
@@ -29,7 +32,9 @@ function getPlayer(players, name, classHint) {
 }
 
 const MIN_DEATHS_FOR_DEFENSIVE_STATS = 2; // need a real sample before judging defensive habits
-const MIN_KILLS_FOR_DPS_POTION_STAT = 3; // need a few kill pulls before "no pots" is meaningful
+// Gated on attended pulls (kills + wipes), not kill pulls alone — a heavy-wipe night
+// can have very few (or zero) kills, and these stats matter just as much on wipes.
+const MIN_ATTENDED_PULLS_FOR_STAT = 3;
 const TOP_N = 5;
 
 function topByKey(roster, key, n = TOP_N) {
@@ -78,9 +83,15 @@ export function buildNightSummary(analysis) {
     }
     for (const c of pull.casts ?? []) {
       if (!c.sourceName) continue;
-      if (isConsumableAbility(c.abilityName) && consumableCategory(c.abilityName) === "dps") {
-        const p = getPlayer(players, c.sourceName, c.sourceClass);
+      const classified = classifyCast(c);
+      if (!classified) continue;
+      const p = getPlayer(players, c.sourceName, c.sourceClass);
+      if (classified.type === "consumable" && classified.category === "dps") {
         p.dpsPotionCount += 1;
+      } else if (classified.type === "defensive" && classified.countsTowardUsageStats) {
+        p.defensiveCastCount += 1;
+      } else if (classified.type === "external") {
+        p.externalsGivenCount += 1;
       }
     }
     // Enchants checked at first/last appearance only (see missingEnchantSlots below);
@@ -88,6 +99,7 @@ export function buildNightSummary(analysis) {
     for (const prepCheck of pull.prepChecks ?? []) {
       if (!prepCheck.playerName) continue;
       const p = getPlayer(players, prepCheck.playerName, prepCheck.playerClass);
+      p.attendedPulls += 1;
       if (!p.firstPrepCheck) p.firstPrepCheck = prepCheck;
       p.lastPrepCheck = prepCheck;
       if (!prepCheck.hasFlask) p.missingFlaskPulls.push(pull.pullNumber);
@@ -135,13 +147,22 @@ export function buildNightSummary(analysis) {
   const defensiveRate = (p) => p.defensiveUsedCount / p.totalDeaths;
   const diedWithNothingUp = [...withDeathSample]
     .filter((p) => defensiveRate(p) < 1)
-    .sort((a, b) => defensiveRate(a) - defensiveRate(b))
+    // Rate first, but a lot of nights everyone lands on the exact same 0% — break
+    // ties by death count so it's not just an arbitrary ordering when that happens.
+    .sort((a, b) => defensiveRate(a) - defensiveRate(b) || b.totalDeaths - a.totalDeaths)
     .slice(0, TOP_N);
 
   const noDpsPotions = roster
-    .filter((p) => p.parsePercents.length >= MIN_KILLS_FOR_DPS_POTION_STAT && p.dpsPotionCount === 0)
-    .sort((a, b) => b.parsePercents.length - a.parsePercents.length)
+    .filter((p) => p.attendedPulls >= MIN_ATTENDED_PULLS_FOR_STAT && p.dpsPotionCount === 0)
+    .sort((a, b) => b.attendedPulls - a.attendedPulls)
     .slice(0, TOP_N);
+
+  const mostDefensivesUsed = topByKey(roster, "defensiveCastCount");
+  const leastDefensivesUsed = roster
+    .filter((p) => p.attendedPulls >= MIN_ATTENDED_PULLS_FOR_STAT && p.defensiveCastCount === 0)
+    .sort((a, b) => b.attendedPulls - a.attendedPulls)
+    .slice(0, TOP_N);
+  const mostExternalsGiven = topByKey(roster, "externalsGivenCount");
 
   const bossesSummary = [...bossStats.values()].sort((a, b) => a.firstPullNumber - b.firstPullNumber);
 
@@ -177,6 +198,9 @@ export function buildNightSummary(analysis) {
     diedWithNothingUp,
     mostInterrupts: topByKey(roster, "interruptCount"),
     noDpsPotions,
+    mostDefensivesUsed,
+    leastDefensivesUsed,
+    mostExternalsGiven,
     missingPrep,
     raidBuffLapses,
   };

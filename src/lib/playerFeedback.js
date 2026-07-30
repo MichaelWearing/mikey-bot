@@ -1,10 +1,5 @@
 import { cappedDeathsForTally } from "./analyze.js";
-import {
-  DEFENSIVE_ABILITY_NAMES,
-  EXTERNAL_ABILITY_NAMES,
-  isConsumableAbility,
-  consumableCategory,
-} from "./defensives.js";
+import { classifyCast } from "./defensives.js";
 import { CLASS_BUFFS } from "./prep.js";
 
 function groupBy(items, keyFn) {
@@ -325,41 +320,30 @@ export function buildPlayerFeedback(analysis, playerNames) {
     for (const c of pull.casts ?? []) {
       if (!nameSet.has(c.sourceName)) continue;
 
-      if (isConsumableAbility(c.abilityName)) {
-        // Consumables are always self-used — no target check needed (and WCL's
-        // targetID on untargeted item uses is unreliable anyway, see below).
+      const classified = classifyCast(c);
+      if (!classified) continue;
+
+      if (classified.type === "consumable") {
         const key = `${c.sourceName}::${c.abilityName}`;
         const entry = consumableCounts.get(key) ?? {
           characterName: c.sourceName,
           characterClass: c.sourceClass,
           name: c.abilityName,
-          category: consumableCategory(c.abilityName),
+          category: classified.category,
           count: 0,
         };
         entry.count += 1;
         consumableCounts.set(key, entry);
-      } else if (DEFENSIVE_ABILITY_NAMES.has(c.abilityName)) {
-        // A handful of these can also be cast on someone else (Blessing of
-        // Protection, Lay on Hands, etc.). If it was genuinely given to someone
-        // else, track it separately as a support action rather than a personal
-        // defensive. Untargeted self-casts (Divine Protection, Divine Shield, ...)
-        // log with whatever enemy is currently targeted, not "self" — that's not a
-        // real external, so it only counts as one if the target is an actual player.
-        const isDualPurpose = EXTERNAL_ABILITY_NAMES.has(c.abilityName);
-        const isRealPlayerTarget = c.targetType === "Player" && c.targetID !== c.sourceID;
-
-        if (isDualPurpose && isRealPlayerTarget) {
-          externalsGiven.push({
-            characterName: c.sourceName,
-            characterClass: c.sourceClass,
-            ability: c.abilityName,
-            targetName: c.targetName ?? "someone",
-            pullNumber: pull.pullNumber,
-            bossName: pull.bossName,
-          });
-          continue;
-        }
-
+      } else if (classified.type === "external") {
+        externalsGiven.push({
+          characterName: c.sourceName,
+          characterClass: c.sourceClass,
+          ability: c.abilityName,
+          targetName: c.targetName ?? "someone",
+          pullNumber: pull.pullNumber,
+          bossName: pull.bossName,
+        });
+      } else if (classified.type === "defensive") {
         const key = `${c.sourceName}::${c.abilityName}`;
         const entry = defensiveCounts.get(key) ?? {
           characterName: c.sourceName,

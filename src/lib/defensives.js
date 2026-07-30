@@ -43,6 +43,40 @@ export const EXTERNAL_ABILITY_NAMES = new Set([
   "Darkness", // Devourer DH only (custom content) — confirmed dual-purpose
 ]);
 
+// Defensives that also double as a normal rotational ability, so raw cast counts don't
+// reflect deliberate cooldown usage — Death Strike is a DK's core resource spender,
+// confirmed via real data to rack up 2000+ casts a night vs. ~100-300 for genuine
+// cooldowns. Still a legitimate defensive for "did they have something up when they
+// died," just excluded from usage-count leaderboards (Most/Least Defensives Used).
+const ROTATIONAL_DEFENSIVE_NAMES = new Set(["Death Strike"]);
+
+// Classifies a single friendly cast for tallying purposes — shared by playerFeedback.js
+// and summary.js so both agree on what counts as a consumable vs. a personal defensive
+// vs. an external given to someone else (rather than duplicating this logic twice and
+// risking it drifting out of sync).
+//
+// Returns one of:
+//   { type: "consumable", category: "health" | "dps" | "mana" | "other" }
+//   { type: "defensive", countsTowardUsageStats: boolean }
+//   { type: "external" }    — a dual-purpose ability actually cast on another player
+//   null                     — not a tracked ability at all
+export function classifyCast(c) {
+  if (isConsumableAbility(c.abilityName)) {
+    return { type: "consumable", category: consumableCategory(c.abilityName) };
+  }
+  if (DEFENSIVE_ABILITY_NAMES.has(c.abilityName)) {
+    // A handful of these can also be cast on someone else (Blessing of Protection,
+    // Lay on Hands, etc.). Untargeted self-casts (Divine Protection, Divine Shield,
+    // ...) log with whatever enemy is currently targeted, not "self" — that's not a
+    // real external, so it only counts as one if the target is an actual player.
+    const isDualPurpose = EXTERNAL_ABILITY_NAMES.has(c.abilityName);
+    const isRealPlayerTarget = c.targetType === "Player" && c.targetID !== c.sourceID;
+    if (isDualPurpose && isRealPlayerTarget) return { type: "external" };
+    return { type: "defensive", countsTowardUsageStats: !ROTATIONAL_DEFENSIVE_NAMES.has(c.abilityName) };
+  }
+  return null;
+}
+
 export function findDefensiveBeforeDeath(casts, actorId, deathTimestamp, windowMs = 10000) {
   const used = casts.filter(
     (c) =>
