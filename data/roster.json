@@ -1,7 +1,40 @@
 [
-  { "names": ["Wygzy"], "channelName": "nygzy" },
-  { "names": ["Mikey", "Rambomikey"], "channelName": "mikey" },
-  { "names": ["Breozhar"], "channelName": "shaun" },
-  { "names": ["Msvv"], "channelName": "msv" },
-  { "names": ["Pynky"], "channelName": "officer" }
+  { "names": ["Wygzy"], "channelName": "nygzy", "characters": [{ "name": "Wygzy", "class": "Warlock", "spec": "Demonology" }] },
+  {
+    "names": ["Mikey", "Rambomikey"],
+    "channelName": "mikey",
+    "characters": [
+      { "name": "Mikey", "class": "Paladin", "spec": "Retribution" },
+      { "name": "Rambomikey", "class": "Hunter", "spec": "BeastMastery" }
+    ]
+  },
+  {
+    "names": ["Breozhar", "Breoshar"],
+    "channelName": "shaun",
+    "characters": [
+      { "name": "Breozhar", "class": "DemonHunter", "spec": "Havoc" },
+      { "name": "Breoshar", "class": "Monk", "spec": "Windwalker" }
+    ]
+  },
+  { "names": ["Msvv"], "channelName": "msv", "characters": [{ "name": "Msvv", "class": "Rogue", "spec": "Subtlety" }] },
+  { "names": ["Pynky"], "channelName": "officer", "characters": [{ "name": "Pynky", "class": "Hunter", "spec": "Survival" }] },
+  { "names": ["Lutziehdk"], "channelName": "lucy", "characters": [{ "name": "Lutziehdk", "class": "DeathKnight", "spec": "Unholy" }] },
+  { "names": ["Thronehobo"], "channelName": "throne", "characters": [{ "name": "Thronehobo", "class": "Shaman", "spec": "Elemental" }] },
+  { "names": ["Öc"], "channelName": "oc", "characters": [{ "name": "Öc", "class": "Warrior", "spec": "Fury" }] },
+  { "names": ["Krepowl"], "channelName": "krepo", "characters": [{ "name": "Krepowl", "class": "Druid", "spec": "Balance" }] },
+  { "names": ["Nèèko"], "channelName": "neeko", "characters": [{ "name": "Nèèko", "class": "Paladin", "spec": "Retribution" }] },
+  { "names": ["Pàzdh"], "channelName": "paz", "characters": [{ "name": "Pàzdh", "class": "DemonHunter", "spec": "Devourer" }] },
+  { "names": ["Katawoke"], "channelName": "kata", "characters": [{ "name": "Katawoke", "class": "Evoker", "spec": "Augmentation" }] },
+  { "names": ["Clottbott"], "channelName": "clott", "characters": [{ "name": "Clottbott", "class": "Warlock", "spec": "Affliction" }] },
+  { "names": ["Tkpmage"], "channelName": "tkp", "characters": [{ "name": "Tkpmage", "class": "Mage", "spec": "Fire" }] },
+  { "names": ["Capitanfade"], "channelName": "fade", "characters": [{ "name": "Capitanfade", "class": "Mage", "spec": "Frost" }] },
+  { "names": ["Dragoilen"], "channelName": "goilen", "characters": [{ "name": "Dragoilen", "class": "Evoker", "spec": "Augmentation" }] },
+  { "names": ["Deadnavia"], "channelName": "anavia", "characters": [{ "name": "Deadnavia", "class": "DeathKnight", "spec": "Frost" }] },
+  { "names": ["Topkek"], "channelName": "tonthick", "characters": [{ "name": "Topkek", "class": "Hunter", "spec": "Marksmanship" }] },
+  { "names": ["Mammy"], "channelName": "mammy", "characters": [{ "name": "Mammy", "class": "Priest", "spec": "Holy" }] },
+  { "names": ["Saphirá"], "channelName": "saph", "characters": [{ "name": "Saphirá", "class": "Evoker", "spec": "Preservation" }] },
+  { "names": ["Londis"], "channelName": "jamal", "characters": [{ "name": "Londis", "class": "Paladin", "spec": "Holy" }] },
+  { "names": ["Tigrane"], "channelName": "tigrane", "characters": [{ "name": "Tigrane", "class": "Druid", "spec": "Restoration" }] },
+  { "names": ["Djorkfurry"], "channelName": "djork", "characters": [{ "name": "Djorkfurry", "class": "Evoker", "spec": "Augmentation" }] },
+  { "names": ["Jacomonk"], "channelName": "jaco", "characters": [{ "name": "Jacomonk", "class": "Monk", "spec": "Brewmaster" }] }
 ]

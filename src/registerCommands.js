@@ -7,6 +7,7 @@ import * as startTrackingLiveCommand from "./commands/startTrackingLive.js";
 import * as stopTrackingLiveCommand from "./commands/stopTrackingLive.js";
 import * as givePersonalFeedbackToAllCommand from "./commands/givePersonalFeedbackToAll.js";
 import * as listDefensivesCommand from "./commands/listDefensives.js";
+import * as requestDefensivesCommand from "./commands/requestDefensives.js";
 
 const commands = [
   analyzeCommand.data.toJSON(),
@@ -16,6 +17,7 @@ const commands = [
   stopTrackingLiveCommand.data.toJSON(),
   givePersonalFeedbackToAllCommand.data.toJSON(),
   listDefensivesCommand.data.toJSON(),
+  requestDefensivesCommand.data.toJSON(),
 ];
 
 const rest = new REST().setToken(process.env.DISCORD_BOT_TOKEN);
