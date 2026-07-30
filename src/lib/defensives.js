@@ -3,7 +3,7 @@ import { CLASS_SPECS } from "./classRegistry.js";
 // Explicit current-tier consumables, categorized for display. Extend these as the
 // tier changes — provide the exact ability name as it appears in the log.
 const HEALTH_CONSUMABLE_NAMES = new Set([
-  "Healthstone", "Silvermoon Health Potion", "Healing Potion", "Draenic Healing Potion", "Algari Healing Potion",
+  "Healthstone", "Demonic Healthstone", "Silvermoon Health Potion", "Healing Potion", "Draenic Healing Potion", "Algari Healing Potion",
 ]);
 const DPS_CONSUMABLE_NAMES = new Set(["Potion of Recklessness", "Light's Potential"]);
 const MANA_CONSUMABLE_NAMES = new Set(["Lightfused Mana Potion", "Potion of Devoured Dreams"]);
@@ -39,7 +39,7 @@ export function consumableCategory(abilityName) {
 export const EXTERNAL_ABILITY_NAMES = new Set([
   "Pain Suppression", "Guardian Spirit",
   "Blessing of Protection", "Blessing of Sacrifice", "Lay on Hands",
-  "Ironbark", "Life Cocoon", "Survival of the Fittest",
+  "Ironbark", "Life Cocoon",
   "Darkness", // Devourer DH only (custom content) — confirmed dual-purpose
 ]);
 
