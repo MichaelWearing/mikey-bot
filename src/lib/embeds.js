@@ -59,6 +59,13 @@ const MAX_KILL_DEATHS_SHOWN = 10; // safety ceiling only — kills rarely have m
 const FIELD_VALUE_LIMIT = 1024;
 
 function deathBlock(d) {
+  if (d.isCalledWipe) {
+    return [
+      `🏳️ ${ANSI.gray}${classEmoji(d.playerClass)} ${d.playerName}${ANSI.reset} — died to ${d.killedBy} (${deathPositionNote(d.deathNumber)})`,
+      `  ${ANSI.gray}(5+ people died to this together — likely a called wipe, not counted against anyone)${ANSI.reset}`,
+    ].join("\n");
+  }
+
   const nameColor = d.isTrigger ? ANSI.yellow : d.isChained ? ANSI.gray : ANSI.bold;
   const tag = d.isTrigger ? "🎯 " : d.isChained ? "↳ " : "";
   const lines = [
@@ -94,7 +101,12 @@ function buildDeathsField(pull) {
   }
 
   const hardCap = pull.kill ? MAX_KILL_DEATHS_SHOWN : MAX_WIPE_DEATHS_SHOWN;
-  const candidates = pull.deaths.slice(0, hardCap);
+  // Individual mistakes first, called-wipe pile-ons last — a mass "wipe called"
+  // moment shouldn't eat the only few visible slots and bury what actually mattered.
+  const prioritized = pull.kill
+    ? pull.deaths
+    : [...pull.deaths.filter((d) => !d.isCalledWipe), ...pull.deaths.filter((d) => d.isCalledWipe)];
+  const candidates = prioritized.slice(0, hardCap);
   const fenceOverhead = "```ansi\n".length + "\n```".length;
   const footerBudget = 40; // room for the "+N more deaths" line
 
@@ -142,6 +154,29 @@ function buildParseFields(pull) {
 
 function summaryLine(p, valueText, color) {
   return `${color}${classEmoji(p.class)} ${p.name}${ANSI.reset} — ${valueText}`;
+}
+
+// Shared by /feedback's own prep field and /summary's raid-wide leaderboard.
+function formatPullList(pullNumbers) {
+  return pullNumbers.map((n) => `#${n}`).join(", ");
+}
+
+function formatPrepIssues({ missingEnchantSlots, missingFlaskPulls, missingFoodPulls, missingWeaponEnchantPulls }) {
+  const parts = [];
+  if (missingEnchantSlots.length > 0) parts.push(`missing enchant: ${missingEnchantSlots.join(", ")}`);
+  if (missingFlaskPulls.length > 0) parts.push(`no flask (Pull ${formatPullList(missingFlaskPulls)})`);
+  if (missingFoodPulls.length > 0) parts.push(`no food (Pull ${formatPullList(missingFoodPulls)})`);
+  if (missingWeaponEnchantPulls.length > 0) parts.push(`no weapon oil (Pull ${formatPullList(missingWeaponEnchantPulls)})`);
+  return parts.join(", ");
+}
+
+// Each entry: { pullNumber, durationClock, missingCount, raidSize }
+function formatBuffLapsePulls(pulls) {
+  return pulls.map((p) => `#${p.pullNumber} (${p.durationClock}, ${p.missingCount}/${p.raidSize} missing)`).join(", ");
+}
+
+function formatRaidBuffLapses(raidBuffLapses) {
+  return raidBuffLapses.map(({ buffName, pulls }) => `let ${buffName} lapse — Pull ${formatBuffLapsePulls(pulls)}`).join("; ");
 }
 
 function addSummaryField(embed, name, list, formatter, { inline = true, caveat = null } = {}) {
@@ -201,6 +236,20 @@ export function buildSummaryEmbed(summary) {
     summary.noDpsPotions,
     (p) => summaryLine(p, `0 across ${p.parsePercents.length} kill${p.parsePercents.length === 1 ? "" : "s"}`, ANSI.yellow),
     { caveat: "free parse left on the table" }
+  );
+  addSummaryField(
+    embed,
+    "⚠️ Missing Prep",
+    summary.missingPrep,
+    (p) => summaryLine(p, formatPrepIssues(p), ANSI.yellow),
+    { inline: false, caveat: "enchants checked at first/last pull; flask/food/weapon oil checked every pull" }
+  );
+  addSummaryField(
+    embed,
+    "🎺 Raid Buff Lapses",
+    summary.raidBuffLapses,
+    (p) => summaryLine(p, formatRaidBuffLapses(p.raidBuffLapses), ANSI.yellow),
+    { inline: false, caveat: "only checked on pulls 30s+; only flags the class(es) that provide that buff" }
   );
 
   if (embed.data.fields === undefined || embed.data.fields.length === 0) {
@@ -263,10 +312,22 @@ export function buildPlayerFeedbackEmbed(feedback) {
   embed.addFields({ name: "📝 Night Verdict", value: feedback.verdict });
 
   if (feedback.deaths.length > 0) {
-    const shown = feedback.deaths.slice(0, 10);
-    let value = "```ansi\n" + shown.map(feedbackDeathLine).join("\n\n") + "\n```";
-    if (feedback.deaths.length > shown.length) {
-      value += `\n*+${feedback.deaths.length - shown.length} more*`;
+    // Personal report — highlight every death for this player, not just the first
+    // few. No arbitrary head-count cap; only Discord's actual field size limits it.
+    const fenceOverhead = "```ansi\n".length + "\n```".length;
+    const footerBudget = 40; // room for the "+N more" line
+    const blocks = [];
+    let bodyLength = 0;
+    for (const block of feedback.deaths.map(feedbackDeathLine)) {
+      const addLength = (blocks.length > 0 ? 2 : 0) + block.length;
+      if (fenceOverhead + bodyLength + addLength > FIELD_VALUE_LIMIT - footerBudget) break;
+      blocks.push(block);
+      bodyLength += addLength;
+    }
+    let value = "```ansi\n" + blocks.join("\n\n") + "\n```";
+    const remaining = feedback.deaths.length - blocks.length;
+    if (remaining > 0) {
+      value += `\n*+${remaining} more*`;
     }
     embed.addFields({ name: `💀 Deaths (${feedback.deaths.length})`, value });
   } else {
@@ -341,18 +402,56 @@ export function buildPlayerFeedbackEmbed(feedback) {
   }
 
   if (feedback.externalsGiven.length > 0) {
-    const shown = feedback.externalsGiven.slice(0, 8);
-    const lines = shown.map(
-      (e) =>
-        `${classEmoji(e.characterClass)} ${e.characterName}${ANSI.reset}: ${ANSI.cyan}${e.ability}${ANSI.reset} → ${e.targetName} (Pull #${e.pullNumber})`
-    );
+    // Ground-targeted raid CDs (Darkness, etc.) log their target as "Environment" —
+    // there's no one to credit, so collapse those into a plain count instead of a
+    // repeated line per cast. Externals with a real target keep the who/when detail.
+    const grouped = new Map();
+    for (const e of feedback.externalsGiven) {
+      const isGroundTargeted = e.targetName === "Environment";
+      const key = isGroundTargeted ? `${e.characterName}::${e.ability}` : `${e.characterName}::${e.ability}::${e.targetName}`;
+      const entry = grouped.get(key) ?? {
+        characterName: e.characterName,
+        characterClass: e.characterClass,
+        ability: e.ability,
+        targetName: isGroundTargeted ? null : e.targetName,
+        count: 0,
+        pullNumbers: [],
+      };
+      entry.count += 1;
+      if (!isGroundTargeted) entry.pullNumbers.push(e.pullNumber);
+      grouped.set(key, entry);
+    }
+
+    const groupedEntries = [...grouped.values()];
+    const shown = groupedEntries.slice(0, 8);
+    const lines = shown.map((e) => {
+      const base = `${classEmoji(e.characterClass)} ${e.characterName}${ANSI.reset}: ${ANSI.cyan}${e.ability}${ANSI.reset}`;
+      if (!e.targetName) return `${base} x${e.count}`;
+      return `${base} → ${e.targetName} (Pull ${e.pullNumbers.map((p) => `#${p}`).join(", ")})`;
+    });
     let value = "```ansi\n" + lines.join("\n\n") + "\n```";
-    if (feedback.externalsGiven.length > shown.length) {
-      value += `\n*+${feedback.externalsGiven.length - shown.length} more*`;
+    if (groupedEntries.length > shown.length) {
+      value += `\n*+${groupedEntries.length - shown.length} more*`;
     }
     embed.addFields({ name: `💙 Externals Given (${feedback.externalsGiven.length})`, value });
   } else {
     embed.addFields({ name: "💙 Externals Given", value: "None used all night" });
+  }
+
+  const prepIssues = formatPrepIssues(feedback.prepCheck);
+  embed.addFields({
+    name: "🧵 Missing Prep",
+    value: prepIssues || "Fully prepped all night! 🎉",
+  });
+
+  // Only shown for classes that actually provide one of the tracked raid buffs —
+  // no point telling a Rogue they "kept up" a buff they never had to maintain.
+  if (feedback.raidBuffProvided) {
+    const value =
+      feedback.raidBuffLapses.length > 0
+        ? formatRaidBuffLapses(feedback.raidBuffLapses)
+        : `Kept **${feedback.raidBuffProvided}** up all night! 🎉`;
+    embed.addFields({ name: "🎺 Raid Buff Uptime", value });
   }
 
   return embed;

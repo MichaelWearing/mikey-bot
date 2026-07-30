@@ -5,6 +5,7 @@ import {
   isConsumableAbility,
   consumableCategory,
 } from "./defensives.js";
+import { CLASS_BUFFS } from "./prep.js";
 
 function groupBy(items, keyFn) {
   const map = new Map();
@@ -205,6 +206,16 @@ export function buildPlayerFeedback(analysis, playerNames) {
   const raidInterrupterTotals = new Map(); // characterName -> total interrupts, whole raid
   let attendedKillPulls = 0;
   let attendedWipePulls = 0;
+  // Enchants: checked at first and last attended pull only (they don't change mid-raid
+  // often) — a slot only counts as "still missing" if it's missing at both checkpoints,
+  // so re-enchanting mid-raid doesn't get flagged. Flask/food/weapon oil: checked every
+  // attended pull, since those do run out and need reapplying.
+  let firstPrepCheck = null;
+  let lastPrepCheck = null;
+  const missingFlaskPulls = [];
+  const missingFoodPulls = [];
+  const missingWeaponEnchantPulls = [];
+  const missedClassBuffPulls = new Map(); // buffName -> pull numbers this player (as provider) let lapse
 
   for (const pull of analysis.pulls) {
     const raidBossEntry = raidBossStats.get(pull.bossName) ?? {
@@ -242,6 +253,28 @@ export function buildPlayerFeedback(analysis, playerNames) {
       if (pull.kill) bossEntry.killed = true;
       else bossEntry.wiped = true;
       playerBossStats.set(pull.bossName, bossEntry);
+
+      const prepCheck = (pull.prepChecks ?? []).find((p) => nameSet.has(p.playerName));
+      if (prepCheck) {
+        if (!firstPrepCheck) firstPrepCheck = prepCheck;
+        lastPrepCheck = prepCheck;
+        if (!prepCheck.hasFlask) missingFlaskPulls.push(pull.pullNumber);
+        if (!prepCheck.hasFood) missingFoodPulls.push(pull.pullNumber);
+        if (!prepCheck.hasWeaponEnchant) missingWeaponEnchantPulls.push(pull.pullNumber);
+      }
+
+      // Only the class buff's providers are on the hook when it lapses — everyone
+      // else missing it (e.g. someone just got rezzed) isn't their fault to track.
+      for (const gap of pull.buffGaps ?? []) {
+        if (!gap.providerPlayerNames.some((n) => nameSet.has(n))) continue;
+        if (!missedClassBuffPulls.has(gap.buffName)) missedClassBuffPulls.set(gap.buffName, []);
+        missedClassBuffPulls.get(gap.buffName).push({
+          pullNumber: pull.pullNumber,
+          durationClock: gap.durationClock,
+          missingCount: gap.missingPlayerNames.length,
+          raidSize: gap.raidSize,
+        });
+      }
     }
 
     // Same "pull was already lost" cutoff as /summary — never show a death that
@@ -307,14 +340,13 @@ export function buildPlayerFeedback(analysis, playerNames) {
         // A handful of these can also be cast on someone else (Blessing of
         // Protection, Lay on Hands, etc.). If it was genuinely given to someone
         // else, track it separately as a support action rather than a personal
-        // defensive. Everything else is purely self-only, so we skip the target
-        // check entirely: WCL logs untargeted self-buffs (Divine Protection,
-        // Divine Shield, ...) with whatever enemy is currently targeted, not
-        // "self", so requiring targetID === sourceID would wrongly drop real usages.
+        // defensive. Untargeted self-casts (Divine Protection, Divine Shield, ...)
+        // log with whatever enemy is currently targeted, not "self" — that's not a
+        // real external, so it only counts as one if the target is an actual player.
         const isDualPurpose = EXTERNAL_ABILITY_NAMES.has(c.abilityName);
-        const isSelfCast = c.targetID == null || c.targetID === c.sourceID;
+        const isRealPlayerTarget = c.targetType === "Player" && c.targetID !== c.sourceID;
 
-        if (isDualPurpose && !isSelfCast) {
+        if (isDualPurpose && isRealPlayerTarget) {
           externalsGiven.push({
             characterName: c.sourceName,
             characterClass: c.sourceClass,
@@ -357,6 +389,11 @@ export function buildPlayerFeedback(analysis, playerNames) {
       return { bossName: raidEntry.bossName, attended: true, killed: playerEntry.killed };
     });
 
+  const missingEnchantSlots =
+    firstPrepCheck && lastPrepCheck
+      ? firstPrepCheck.missingEnchantSlots.filter((slot) => lastPrepCheck.missingEnchantSlots.includes(slot))
+      : [];
+
   return {
     title: analysis.title,
     reportCode: analysis.reportCode,
@@ -373,6 +410,14 @@ export function buildPlayerFeedback(analysis, playerNames) {
     consumables: consumablesUsed,
     defensivesUsed: [...defensiveCounts.values()],
     externalsGiven,
+    prepCheck: {
+      missingEnchantSlots,
+      missingFlaskPulls,
+      missingFoodPulls,
+      missingWeaponEnchantPulls,
+    },
+    raidBuffLapses: [...missedClassBuffPulls.entries()].map(([buffName, pulls]) => ({ buffName, pulls })),
+    raidBuffProvided: Object.entries(CLASS_BUFFS).find(([, cls]) => cls === (firstPrepCheck ?? lastPrepCheck)?.playerClass)?.[0] ?? null,
     verdict: buildVerdict({
       deaths,
       kills,

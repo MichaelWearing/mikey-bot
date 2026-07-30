@@ -15,6 +15,12 @@ function getPlayer(players, name, classHint) {
       interruptCount: 0,
       interruptViaPetCount: 0,
       dpsPotionCount: 0,
+      firstPrepCheck: null,
+      lastPrepCheck: null,
+      missingFlaskPulls: [],
+      missingFoodPulls: [],
+      missingWeaponEnchantPulls: [],
+      missedClassBuffPulls: new Map(), // buffName -> pull numbers this player (as provider) let lapse
     });
   }
   const p = players.get(name);
@@ -77,6 +83,30 @@ export function buildNightSummary(analysis) {
         p.dpsPotionCount += 1;
       }
     }
+    // Enchants checked at first/last appearance only (see missingEnchantSlots below);
+    // flask/food/weapon oil checked every pull, since those run out mid-raid.
+    for (const prepCheck of pull.prepChecks ?? []) {
+      if (!prepCheck.playerName) continue;
+      const p = getPlayer(players, prepCheck.playerName, prepCheck.playerClass);
+      if (!p.firstPrepCheck) p.firstPrepCheck = prepCheck;
+      p.lastPrepCheck = prepCheck;
+      if (!prepCheck.hasFlask) p.missingFlaskPulls.push(pull.pullNumber);
+      if (!prepCheck.hasFood) p.missingFoodPulls.push(pull.pullNumber);
+      if (!prepCheck.hasWeaponEnchant) p.missingWeaponEnchantPulls.push(pull.pullNumber);
+    }
+    // Only the class buff's providers are on the hook when it lapses.
+    for (const gap of pull.buffGaps ?? []) {
+      for (const providerName of gap.providerPlayerNames) {
+        const p = getPlayer(players, providerName, gap.providerClass);
+        if (!p.missedClassBuffPulls.has(gap.buffName)) p.missedClassBuffPulls.set(gap.buffName, []);
+        p.missedClassBuffPulls.get(gap.buffName).push({
+          pullNumber: pull.pullNumber,
+          durationClock: gap.durationClock,
+          missingCount: gap.missingPlayerNames.length,
+          raidSize: gap.raidSize,
+        });
+      }
+    }
   }
 
   const roster = [...players.values()];
@@ -85,6 +115,13 @@ export function buildNightSummary(analysis) {
       p.parsePercents.length > 0
         ? p.parsePercents.reduce((sum, v) => sum + v, 0) / p.parsePercents.length
         : null;
+    // A slot only counts as "still missing" if it's missing at both the first and
+    // last checkpoint, so re-enchanting mid-raid doesn't get flagged.
+    p.missingEnchantSlots =
+      p.firstPrepCheck && p.lastPrepCheck
+        ? p.firstPrepCheck.missingEnchantSlots.filter((slot) => p.lastPrepCheck.missingEnchantSlots.includes(slot))
+        : [];
+    p.raidBuffLapses = [...p.missedClassBuffPulls.entries()].map(([buffName, pulls]) => ({ buffName, pulls }));
   }
 
   const totalDeathsSum = roster.reduce((sum, p) => sum + p.totalDeaths, 0);
@@ -108,6 +145,22 @@ export function buildNightSummary(analysis) {
 
   const bossesSummary = [...bossStats.values()].sort((a, b) => a.firstPullNumber - b.firstPullNumber);
 
+  const missingPrep = roster
+    .map((p) => ({
+      ...p,
+      prepIssueScore:
+        p.missingEnchantSlots.length + p.missingFlaskPulls.length + p.missingFoodPulls.length + p.missingWeaponEnchantPulls.length,
+    }))
+    .filter((p) => p.prepIssueScore > 0)
+    .sort((a, b) => b.prepIssueScore - a.prepIssueScore)
+    .slice(0, TOP_N);
+
+  const raidBuffLapses = roster
+    .map((p) => ({ ...p, buffLapseScore: p.raidBuffLapses.reduce((sum, b) => sum + b.pulls.length, 0) }))
+    .filter((p) => p.buffLapseScore > 0)
+    .sort((a, b) => b.buffLapseScore - a.buffLapseScore)
+    .slice(0, TOP_N);
+
   return {
     title: analysis.title,
     reportCode: analysis.reportCode,
@@ -124,5 +177,7 @@ export function buildNightSummary(analysis) {
     diedWithNothingUp,
     mostInterrupts: topByKey(roster, "interruptCount"),
     noDpsPotions,
+    missingPrep,
+    raidBuffLapses,
   };
 }
