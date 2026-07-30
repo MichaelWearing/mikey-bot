@@ -1,5 +1,6 @@
 import { wclQuery } from "./wcl.js";
 import { findDefensiveBeforeDeath, findExternalBeforeDeath } from "./defensives.js";
+import { hasFlask, hasFood, hasWeaponEnchant, missingEnchantSlots, missingClassBuffs, CLASS_BUFFS } from "./prep.js";
 
 const REPORT_QUERY = `
   query ($code: String!) {
@@ -27,24 +28,45 @@ const REPORT_QUERY = `
   }
 `;
 
-const FIGHT_DETAIL_QUERY = `
+// A busy pull can produce tens of thousands of events (a single spammy resource
+// generator ability alone can rack up thousands of casts), and WCL's default page
+// size is far smaller than that — always request the max page size and follow
+// nextPageTimestamp until each event stream is exhausted, or busy pulls silently
+// get truncated with no error.
+const EVENTS_PAGE_QUERY = `
+  query ($code: String!, $fightId: Int!, $dataType: EventDataType!, $hostilityType: HostilityType, $startTime: Float!) {
+    reportData {
+      report(code: $code) {
+        events(fightIDs: [$fightId], dataType: $dataType, hostilityType: $hostilityType, startTime: $startTime, endTime: 99999999999, limit: 10000) {
+          data
+          nextPageTimestamp
+        }
+      }
+    }
+  }
+`;
+
+const RANKINGS_QUERY = `
   query ($code: String!, $fightId: Int!) {
     reportData {
       report(code: $code) {
-        deaths: events(fightIDs: [$fightId], dataType: Deaths) {
-          data
-        }
-        casts: events(fightIDs: [$fightId], dataType: Casts, hostilityType: Friendlies) {
-          data
-        }
-        interrupts: events(fightIDs: [$fightId], dataType: Interrupts) {
-          data
-        }
         rankings(fightIDs: [$fightId])
       }
     }
   }
 `;
+
+async function fetchAllEvents(code, fightId, dataType, hostilityType = null) {
+  let allData = [];
+  let startTime = 0;
+  while (startTime != null) {
+    const result = await wclQuery(EVENTS_PAGE_QUERY, { code, fightId, dataType, hostilityType, startTime });
+    const page = result.reportData.report.events;
+    allData = allData.concat(page.data);
+    startTime = page.nextPageTimestamp ?? null;
+  }
+  return allData;
+}
 
 function msToClock(ms) {
   const totalSeconds = Math.round(ms / 1000);
@@ -55,6 +77,33 @@ function msToClock(ms) {
 
 const CASCADE_WINDOW_MS = 3000; // deaths this close together are likely the same wipe cascade
 
+const CALLED_WIPE_MIN_COUNT = 5; // this many deaths to the same ability, clustered...
+const CALLED_WIPE_WINDOW_MS = 5000; // ...within this window, reads as an intentional called wipe
+
+// If 5+ people die to the exact same ability within a few seconds, that's almost
+// certainly a raid lead calling the wipe and people stopping healing/soaking on
+// purpose — not individual mistakes. Flags every death in that cluster so tallying
+// can ignore them entirely, rather than blaming players for cooldowns they had no
+// reason to use.
+function markCalledWipeDeaths(deaths) {
+  const calledWipe = new Set();
+  const byAbility = new Map();
+  for (const d of deaths) {
+    if (!byAbility.has(d.killedBy)) byAbility.set(d.killedBy, []);
+    byAbility.get(d.killedBy).push(d);
+  }
+  for (const group of byAbility.values()) {
+    for (let i = 0; i < group.length; i++) {
+      let j = i;
+      while (j < group.length && group[j].timestamp - group[i].timestamp <= CALLED_WIPE_WINDOW_MS) j++;
+      if (j - i >= CALLED_WIPE_MIN_COUNT) {
+        for (let k = i; k < j; k++) calledWipe.add(group[k]);
+      }
+    }
+  }
+  return calledWipe;
+}
+
 // Best-effort heuristic: the first death in a wipe is often what tipped the pull over.
 // A death that follows within a few seconds AND shares the same killing ability is likely
 // genuine fallout from that same mechanic (e.g. a raid-wide hit nobody could react to).
@@ -62,6 +111,7 @@ const CASCADE_WINDOW_MS = 3000; // deaths this close together are likely the sam
 // separate mistake that just happened to land in the same window.
 function annotateDeaths(deaths, isWipe) {
   const sorted = [...deaths].sort((a, b) => a.timestamp - b.timestamp);
+  const calledWipe = isWipe ? markCalledWipeDeaths(sorted) : new Set();
   return sorted.map((d, i) => {
     const isTrigger = isWipe && i === 0;
     const prev = i > 0 ? sorted[i - 1] : null;
@@ -71,16 +121,18 @@ function annotateDeaths(deaths, isWipe) {
     const isNearbyUnrelated = withinWindow && d.killedBy !== prev.killedBy;
     // 1-indexed position in the pull's death order, so displays can say
     // "3rd to die" / "2 others already down" for context.
-    return { ...d, isTrigger, isChained, isNearbyUnrelated, gapMs, deathNumber: i + 1 };
+    return { ...d, isTrigger, isChained, isNearbyUnrelated, gapMs, deathNumber: i + 1, isCalledWipe: calledWipe.has(d) };
   });
 }
 
 const WIPE_DEATH_TALLY_CAP = 3; // a wipe is already lost past this point — don't count the pile-on
 
 // Shared by /summary and /feedback so both apply the exact same "pull was already
-// over" cutoff when tallying per-player stats from a wipe.
+// over" cutoff when tallying per-player stats from a wipe. Called-wipe deaths are
+// dropped first so they don't eat into the 3-death cap and hide a real mistake.
 export function cappedDeathsForTally(pull, cap = WIPE_DEATH_TALLY_CAP) {
-  return pull.kill ? pull.deaths : pull.deaths.slice(0, cap);
+  if (pull.kill) return pull.deaths;
+  return pull.deaths.filter((d) => !d.isCalledWipe).slice(0, cap);
 }
 
 async function analyzeSingleReport(code) {
@@ -100,10 +152,62 @@ async function analyzeSingleReport(code) {
 
   const results = [];
   for (const fight of pulls) {
-    const detail = await wclQuery(FIGHT_DETAIL_QUERY, { code, fightId: fight.id });
-    const reportDetail = detail.reportData.report;
+    const [deathsRaw, castsRaw, interruptsRaw, combatantInfoRaw, rankingsResult] = await Promise.all([
+      fetchAllEvents(code, fight.id, "Deaths"),
+      fetchAllEvents(code, fight.id, "Casts", "Friendlies"),
+      fetchAllEvents(code, fight.id, "Interrupts"),
+      fetchAllEvents(code, fight.id, "CombatantInfo"),
+      fight.kill ? wclQuery(RANKINGS_QUERY, { code, fightId: fight.id }) : Promise.resolve(null),
+    ]);
+    const rankingsData = rankingsResult?.reportData.report.rankings;
 
-    const casts = (reportDetail.casts?.data ?? []).map((c) => {
+    // Prep check (enchants, flask, food, weapon oil) per player at this pull —
+    // /feedback and /summary decide independently how to use start/end vs. every-pull.
+    const prepChecks = combatantInfoRaw.map((c) => {
+      const player = actorsById.get(c.sourceID);
+      return {
+        playerName: player?.name ?? null,
+        playerClass: player?.subType ?? null,
+        hasFlask: hasFlask(c.auras ?? []),
+        hasFood: hasFood(c.auras ?? []),
+        hasWeaponEnchant: hasWeaponEnchant(c.gear ?? []),
+        missingEnchantSlots: missingEnchantSlots(c.gear ?? []),
+        missingClassBuffs: missingClassBuffs(c.auras ?? []),
+      };
+    });
+
+    // Raid-wide class buffs (Arcane Intellect, Battle Shout, etc.) — only worth
+    // flagging on pulls long enough to matter, and only attributed to whoever's
+    // actually present and capable of providing that buff this pull.
+    const MIN_PULL_DURATION_FOR_BUFF_CHECK_MS = 120000;
+    const buffGaps = [];
+    if (fight.endTime - fight.startTime >= MIN_PULL_DURATION_FOR_BUFF_CHECK_MS) {
+      const missingPlayersByBuff = new Map();
+      for (const p of prepChecks) {
+        for (const buffName of p.missingClassBuffs) {
+          if (!missingPlayersByBuff.has(buffName)) missingPlayersByBuff.set(buffName, []);
+          missingPlayersByBuff.get(buffName).push(p.playerName);
+        }
+      }
+      for (const [buffName, missingPlayerNames] of missingPlayersByBuff) {
+        const providerClass = CLASS_BUFFS[buffName];
+        const providerPlayerNames = prepChecks.filter((p) => p.playerClass === providerClass).map((p) => p.playerName);
+        if (providerPlayerNames.length === 0) continue; // nobody in the raid can provide it — not fair to flag
+        buffGaps.push({
+          buffName,
+          providerClass,
+          missingPlayerNames,
+          providerPlayerNames,
+          raidSize: prepChecks.length,
+          // WCL gives no reliable event evidence of exactly when a still-missing raid
+          // buff would have been (re)applied — these buffs are essentially never cast
+          // mid-combat, so "missing at pull start" reads as "missing the whole pull".
+          durationClock: msToClock(fight.endTime - fight.startTime),
+        });
+      }
+    }
+
+    const casts = castsRaw.map((c) => {
       const source = actorsById.get(c.sourceID);
       const target = actorsById.get(c.targetID);
       return {
@@ -112,10 +216,11 @@ async function analyzeSingleReport(code) {
         sourceName: source?.name ?? null,
         sourceClass: source?.subType ?? null,
         targetName: target?.name ?? null,
+        targetType: target?.type ?? null,
       };
     });
 
-    const interrupts = (reportDetail.interrupts?.data ?? []).map((i) => {
+    const interrupts = interruptsRaw.map((i) => {
       // Pet interrupts (Warlock Felhunter's Spell Lock, etc.) show up in the log
       // under the pet's own actor, not the player's — resolve back to the owner
       // so a Warlock's pet kicks actually count toward their interrupt total.
@@ -138,7 +243,7 @@ async function analyzeSingleReport(code) {
       };
     });
 
-    const rawDeaths = (reportDetail.deaths?.data ?? []).map((d) => {
+    const rawDeaths = deathsRaw.map((d) => {
       const player = actorsById.get(d.targetID);
       const killedBy = abilitiesById.get(d.killingAbilityGameID) ?? "Unknown ability";
       const defensiveUsed = findDefensiveBeforeDeath(casts, d.targetID, d.timestamp);
@@ -163,7 +268,7 @@ async function analyzeSingleReport(code) {
     let bottomParses = [];
     let allParses = [];
     if (fight.kill) {
-      const rankingEntry = reportDetail.rankings?.data?.[0];
+      const rankingEntry = rankingsData?.data?.[0];
       const allCharacters = [];
       if (rankingEntry?.roles) {
         for (const role of Object.values(rankingEntry.roles)) {
@@ -204,6 +309,8 @@ async function analyzeSingleReport(code) {
       allParses,
       casts,
       interrupts,
+      prepChecks,
+      buffGaps,
     });
   }
 
