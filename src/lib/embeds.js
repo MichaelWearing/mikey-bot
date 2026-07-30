@@ -61,7 +61,7 @@ const FIELD_VALUE_LIMIT = 1024;
 function deathBlock(d) {
   if (d.isCalledWipe) {
     return [
-      `🏳️ ${ANSI.gray}${classEmoji(d.playerClass)} ${d.playerName}${ANSI.reset} — died to ${d.killedBy} (${deathPositionNote(d.deathNumber)})`,
+      `🏳️ ${ANSI.gray}${classEmoji(d.playerClass)} ${d.playerName}${ANSI.reset} — died to ${d.killedBy} at ${d.timeIntoPull} (${deathPositionNote(d.deathNumber)})`,
       `  ${ANSI.gray}(5+ people died to this together — likely a called wipe, not counted against anyone)${ANSI.reset}`,
     ].join("\n");
   }
@@ -69,7 +69,7 @@ function deathBlock(d) {
   const nameColor = d.isTrigger ? ANSI.yellow : d.isChained ? ANSI.gray : ANSI.bold;
   const tag = d.isTrigger ? "🎯 " : d.isChained ? "↳ " : "";
   const lines = [
-    `${tag}${nameColor}${classEmoji(d.playerClass)} ${d.playerName}${ANSI.reset} — died to ${d.killedBy} (${deathPositionNote(d.deathNumber)})`,
+    `${tag}${nameColor}${classEmoji(d.playerClass)} ${d.playerName}${ANSI.reset} — died to ${d.killedBy} at ${d.timeIntoPull} (${deathPositionNote(d.deathNumber)})`,
   ];
 
   if (d.isTrigger) {
@@ -78,6 +78,12 @@ function deathBlock(d) {
     lines.push(`  ${ANSI.gray}(+${Math.round(d.gapMs / 1000)}s — part of the same cascade)${ANSI.reset}`);
   } else if (d.isNearbyUnrelated) {
     lines.push(`  ${ANSI.gray}(+${Math.round(d.gapMs / 1000)}s after previous death — different cause)${ANSI.reset}`);
+  }
+
+  if (d.sharedMomentCount > 0) {
+    lines.push(
+      `  ${ANSI.gray}(${d.sharedMomentCount} other${d.sharedMomentCount === 1 ? "" : "s"} also died to ${d.killedBy} within the same second — may be a shared mechanic)${ANSI.reset}`
+    );
   }
 
   if (d.defensiveUsed) {
@@ -270,9 +276,14 @@ function feedbackDeathLine(d) {
     ? `  ${ANSI.cyan}💙 ${d.externalHealer} tried to save them with ${d.externalAbility}${ANSI.reset}`
     : `  ${ANSI.red}✗ no defensive used${ANSI.reset}`;
   const pullTag = d.kill ? "Kill" : "Wipe";
+  const sharedMomentNote =
+    d.sharedMomentCount > 0
+      ? `\n  ${ANSI.gray}(${d.sharedMomentCount} other${d.sharedMomentCount === 1 ? "" : "s"} also died to ${d.killedBy} within the same second — may be a shared mechanic)${ANSI.reset}`
+      : "";
   return (
-    `${characterTag(d.characterName, d.characterClass)} — Pull #${d.pullNumber} — ${d.bossName} (${pullTag}) — died to ${d.killedBy} (${deathPositionNote(d.deathNumber)})\n` +
-    status
+    `${characterTag(d.characterName, d.characterClass)} — Pull #${d.pullNumber} — ${d.bossName} (${pullTag}) — died to ${d.killedBy} at ${d.timeIntoPull} (${deathPositionNote(d.deathNumber)})` +
+    sharedMomentNote +
+    `\n${status}`
   );
 }
 

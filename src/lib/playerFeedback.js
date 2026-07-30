@@ -288,6 +288,8 @@ export function buildPlayerFeedback(analysis, playerNames) {
         bossName: pull.bossName,
         kill: pull.kill,
         killedBy: d.killedBy,
+        timeIntoPull: d.timeIntoPull,
+        sharedMomentCount: d.sharedMomentCount,
         defensiveUsed: d.defensiveUsed,
         externalHealer: d.externalHealer,
         externalAbility: d.externalAbility,

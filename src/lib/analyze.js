@@ -77,31 +77,41 @@ function msToClock(ms) {
 
 const CASCADE_WINDOW_MS = 3000; // deaths this close together are likely the same wipe cascade
 
-const CALLED_WIPE_MIN_COUNT = 5; // this many deaths to the same ability, clustered...
+const CALLED_WIPE_MIN_COUNT = 5; // this many deaths, clustered...
 const CALLED_WIPE_WINDOW_MS = 5000; // ...within this window, reads as an intentional called wipe
 
-// If 5+ people die to the exact same ability within a few seconds, that's almost
-// certainly a raid lead calling the wipe and people stopping healing/soaking on
-// purpose — not individual mistakes. Flags every death in that cluster so tallying
-// can ignore them entirely, rather than blaming players for cooldowns they had no
-// reason to use.
+// If 5+ people die within a few seconds of each other, that's almost certainly a raid
+// lead calling the wipe and people stopping healing/soaking on purpose — not individual
+// mistakes. Clusters by TIME ONLY, not by matching killedBy ability: the same raid-wide
+// moment often kills different people via different exact abilities (DoT ticks, a Fire
+// Mage's Cauterize delaying their actual killing blow, etc.), so requiring an identical
+// ability name missed real called-wipe clusters (confirmed by Capitanfade). Flags every
+// death in the cluster so tallying can ignore them entirely, rather than blaming players
+// for cooldowns they had no reason to use.
 function markCalledWipeDeaths(deaths) {
   const calledWipe = new Set();
-  const byAbility = new Map();
-  for (const d of deaths) {
-    if (!byAbility.has(d.killedBy)) byAbility.set(d.killedBy, []);
-    byAbility.get(d.killedBy).push(d);
-  }
-  for (const group of byAbility.values()) {
-    for (let i = 0; i < group.length; i++) {
-      let j = i;
-      while (j < group.length && group[j].timestamp - group[i].timestamp <= CALLED_WIPE_WINDOW_MS) j++;
-      if (j - i >= CALLED_WIPE_MIN_COUNT) {
-        for (let k = i; k < j; k++) calledWipe.add(group[k]);
-      }
+  for (let i = 0; i < deaths.length; i++) {
+    let j = i;
+    while (j < deaths.length && deaths[j].timestamp - deaths[i].timestamp <= CALLED_WIPE_WINDOW_MS) j++;
+    if (j - i >= CALLED_WIPE_MIN_COUNT) {
+      for (let k = i; k < j; k++) calledWipe.add(deaths[k]);
     }
   }
   return calledWipe;
+}
+
+const SHARED_MOMENT_WINDOW_MS = 1000; // same ability, this close together — flag as context, not an exclusion
+
+// Below the called-wipe headcount (5+), a small cluster dying to the exact same ability
+// within about a second is genuinely ambiguous — could be a real shared mistake (a few
+// people failing to spread from a cleave) or an unavoidable hit (a missed interrupt
+// one-shotting whoever it caught). We can't tell those apart from clustering alone, so
+// this stays informational only: still counts as a real death, just surfaces the context
+// instead of the bot silently deciding it wasn't their fault.
+function countSharedMoment(deaths, target) {
+  return deaths.filter(
+    (d) => d !== target && d.killedBy === target.killedBy && Math.abs(d.timestamp - target.timestamp) <= SHARED_MOMENT_WINDOW_MS
+  ).length;
 }
 
 // Best-effort heuristic: the first death in a wipe is often what tipped the pull over.
@@ -121,7 +131,16 @@ function annotateDeaths(deaths, isWipe) {
     const isNearbyUnrelated = withinWindow && d.killedBy !== prev.killedBy;
     // 1-indexed position in the pull's death order, so displays can say
     // "3rd to die" / "2 others already down" for context.
-    return { ...d, isTrigger, isChained, isNearbyUnrelated, gapMs, deathNumber: i + 1, isCalledWipe: calledWipe.has(d) };
+    return {
+      ...d,
+      isTrigger,
+      isChained,
+      isNearbyUnrelated,
+      gapMs,
+      deathNumber: i + 1,
+      isCalledWipe: calledWipe.has(d),
+      sharedMomentCount: calledWipe.has(d) ? 0 : countSharedMoment(sorted, d),
+    };
   });
 }
 
@@ -253,6 +272,7 @@ async function analyzeSingleReport(code) {
         playerClass: player?.subType ?? null,
         killedBy,
         timestamp: d.timestamp,
+        timeIntoPull: msToClock(d.timestamp - fight.startTime),
         defensiveUsed,
         externalHealer: externalCast ? actorsById.get(externalCast.sourceID)?.name ?? "Someone" : null,
         externalAbility: externalCast?.abilityName ?? null,
