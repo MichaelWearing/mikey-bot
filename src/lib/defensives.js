@@ -3,10 +3,18 @@ import { CLASS_SPECS } from "./classRegistry.js";
 // Explicit current-tier consumables, categorized for display. Extend these as the
 // tier changes — provide the exact ability name as it appears in the log.
 const HEALTH_CONSUMABLE_NAMES = new Set([
-  "Healthstone", "Demonic Healthstone", "Silvermoon Health Potion", "Healing Potion", "Draenic Healing Potion", "Algari Healing Potion",
+  "Healthstone", "Demonic Healthstone", "Silvermoon Health Potion", "Concentrated Silvermoon Health Potion",
+  "Healing Potion", "Draenic Healing Potion", "Algari Healing Potion",
 ]);
 const DPS_CONSUMABLE_NAMES = new Set(["Potion of Recklessness", "Light's Potential"]);
 const MANA_CONSUMABLE_NAMES = new Set(["Lightfused Mana Potion", "Potion of Devoured Dreams"]);
+
+// Midnight S2: Concentrated Silvermoon Health Potion is crafted from 25 plain
+// Silvermoon Health Potions and heals for far more — a straight upgrade, not a
+// preference. Worth flagging anyone still drinking the old one who never touched
+// the new one. Update these if a future tier repeats the "concentrated" pattern.
+export const OUTDATED_HEALTH_POTION_NAME = "Silvermoon Health Potion";
+export const UPGRADED_HEALTH_POTION_NAME = "Concentrated Silvermoon Health Potion";
 
 // Ability names that count as "used a defensive" when cast shortly before a death.
 // Includes every health consumable (drinking a health pot to survive counts), but

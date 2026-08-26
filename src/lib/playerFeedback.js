@@ -1,5 +1,5 @@
 import { cappedDeathsForTally } from "./analyze.js";
-import { classifyCast } from "./defensives.js";
+import { classifyCast, OUTDATED_HEALTH_POTION_NAME, UPGRADED_HEALTH_POTION_NAME } from "./defensives.js";
 import { CLASS_BUFFS } from "./prep.js";
 
 function groupBy(items, keyFn) {
@@ -40,9 +40,27 @@ function buildHeadline({ totalDeaths, avgParse, parseText }) {
 // Specific, personalized observations pulled from the same stats shown in the rest of
 // the report. Each is tagged with a weight (importance) and polarity so buildVerdict
 // can pick the most relevant ones instead of always leading with the worst news.
-function buildObservations({ deaths, kills, avgParse, interrupts, consumables, totalKillPulls, externalsGiven, othersInterruptTotals }) {
+function buildObservations({
+  deaths,
+  kills,
+  avgParse,
+  interrupts,
+  consumables,
+  totalKillPulls,
+  externalsGiven,
+  othersInterruptTotals,
+  role,
+  orbCarryCount,
+  feastSoakCount,
+  digInAlignmentCount,
+}) {
   const notes = [];
-  const noDef = deaths.filter((d) => !d.defensiveUsed && !d.externalAbility);
+  // Deaths to boss mechanics no defensive could have prevented (see
+  // DEFENSIVE_UNPREVENTABLE_DEATHS in analyze.js) are excluded from cooldown-usage
+  // judgment entirely — they still count toward the death total and repeat-boss/
+  // repeat-ability notes below, just not toward "you had nothing up."
+  const preventableDeaths = deaths.filter((d) => d.defensivePreventable);
+  const noDef = preventableDeaths.filter((d) => !d.defensiveUsed && !d.externalAbility);
 
   const repeatBoss = topRepeatGroup(groupBy(deaths, (d) => d.bossName));
   if (repeatBoss) {
@@ -68,7 +86,7 @@ function buildObservations({ deaths, kills, avgParse, interrupts, consumables, t
     }
   }
 
-  if (deaths.length > 0 && noDef.length === deaths.length) {
+  if (preventableDeaths.length > 0 && noDef.length === preventableDeaths.length) {
     notes.push({
       weight: 95,
       polarity: "negative",
@@ -81,7 +99,7 @@ function buildObservations({ deaths, kills, avgParse, interrupts, consumables, t
       polarity: "negative",
       text: `${noDef.length} of those death${noDef.length === 1 ? "" : "s"} had nothing defensive up beforehand (on ${bosses.join(", ")}).`,
     });
-  } else if (deaths.length >= 2) {
+  } else if (preventableDeaths.length >= 2) {
     notes.push({
       weight: 65,
       polarity: "neutral",
@@ -117,12 +135,25 @@ function buildObservations({ deaths, kills, avgParse, interrupts, consumables, t
     }
   }
 
+  // DPS-role only — a healer or tank correctly never touching a DPS potion isn't a
+  // gap to close, and role stays unknown if this player never landed a kill-pull
+  // ranking that night, so it's safely skipped rather than guessed at.
   const dpsPotCount = consumables.filter((c) => c.category === "dps").reduce((sum, c) => sum + c.count, 0);
-  if (totalKillPulls >= 3 && dpsPotCount === 0) {
+  if (role === "dps" && totalKillPulls >= 3 && dpsPotCount === 0) {
     notes.push({
       weight: 45,
       polarity: "negative",
       text: `No DPS potions used across ${totalKillPulls} kills — easy parse to pick up.`,
+    });
+  }
+
+  const oldHealthPotCount = consumables.filter((c) => c.name === OUTDATED_HEALTH_POTION_NAME).reduce((sum, c) => sum + c.count, 0);
+  const newHealthPotCount = consumables.filter((c) => c.name === UPGRADED_HEALTH_POTION_NAME).reduce((sum, c) => sum + c.count, 0);
+  if (oldHealthPotCount > 0 && newHealthPotCount === 0) {
+    notes.push({
+      weight: 40,
+      polarity: "negative",
+      text: `Still drinking the old Silvermoon Health Potion (${oldHealthPotCount}x) — Concentrated Silvermoon Health Potion is a straight upgrade.`,
     });
   }
 
@@ -157,18 +188,69 @@ function buildObservations({ deaths, kills, avgParse, interrupts, consumables, t
     });
   }
 
+  if (orbCarryCount >= 5) {
+    notes.push({
+      weight: 45,
+      polarity: "positive",
+      text: `Carried the venom orb ${orbCarryCount}x on Coiled Altar — pulling real weight on that mechanic.`,
+    });
+  }
+
+  if (feastSoakCount >= 3) {
+    notes.push({
+      weight: 45,
+      polarity: "positive",
+      text: `Soaked Ravenous Feast ${feastSoakCount}x on Twin Fangs — good group-mechanic participation.`,
+    });
+  }
+
+  if (digInAlignmentCount >= 1) {
+    notes.push({
+      weight: 40,
+      polarity: "positive",
+      text: `Saved a raid cooldown for Sszorak's Dig In window instead of popping it on pull.`,
+    });
+  }
+
   return notes;
 }
 
 // Rule-based read of the night: a headline from the two biggest numbers, plus up to two
 // of the most relevant specific observations — biased toward including at least one
 // positive note when one's been earned, so it doesn't read as pure criticism every time.
-function buildVerdict({ deaths, kills, avgParse, interrupts, consumables, totalKillPulls, externalsGiven, othersInterruptTotals }) {
+function buildVerdict({
+  deaths,
+  kills,
+  avgParse,
+  interrupts,
+  consumables,
+  totalKillPulls,
+  externalsGiven,
+  othersInterruptTotals,
+  orbCarryCount,
+  feastSoakCount,
+  digInAlignmentCount,
+}) {
   const totalDeaths = deaths.length;
   const parseText = avgParse !== null ? `${avgParse.toFixed(0)}% average parse` : null;
   const headline = buildHeadline({ totalDeaths, avgParse, parseText });
 
-  const notes = buildObservations({ deaths, kills, avgParse, interrupts, consumables, totalKillPulls, externalsGiven, othersInterruptTotals });
+  // Role is stable for a character across a night — any kill entry with it will do.
+  const role = kills.find((k) => k.role)?.role ?? null;
+  const notes = buildObservations({
+    deaths,
+    kills,
+    avgParse,
+    interrupts,
+    consumables,
+    totalKillPulls,
+    externalsGiven,
+    othersInterruptTotals,
+    role,
+    orbCarryCount,
+    feastSoakCount,
+    digInAlignmentCount,
+  });
   if (notes.length === 0) return headline;
 
   const sorted = [...notes].sort((a, b) => b.weight - a.weight);
@@ -211,6 +293,9 @@ export function buildPlayerFeedback(analysis, playerNames) {
   const missingFoodPulls = [];
   const missingWeaponEnchantPulls = [];
   const missedClassBuffPulls = new Map(); // buffName -> pull numbers this player (as provider) let lapse
+  let orbCarryCount = 0;
+  let digInAlignmentCount = 0;
+  let feastSoakCount = 0;
 
   for (const pull of analysis.pulls) {
     const raidBossEntry = raidBossStats.get(pull.bossName) ?? {
@@ -225,6 +310,16 @@ export function buildPlayerFeedback(analysis, playerNames) {
 
     for (const i of pull.interrupts ?? []) {
       raidInterrupterTotals.set(i.sourceName, (raidInterrupterTotals.get(i.sourceName) ?? 0) + 1);
+    }
+
+    for (const o of pull.orbCarries ?? []) {
+      if (nameSet.has(o.playerName)) orbCarryCount += 1;
+    }
+    for (const f of pull.feastSoaks ?? []) {
+      if (nameSet.has(f.playerName)) feastSoakCount += 1;
+    }
+    if (pull.digInBloodlust && nameSet.has(pull.digInBloodlust.playerName)) {
+      digInAlignmentCount += 1;
     }
 
     // Attendance for this pull: any trace of the player at all (death, ranked parse,
@@ -286,6 +381,7 @@ export function buildPlayerFeedback(analysis, playerNames) {
         timeIntoPull: d.timeIntoPull,
         sharedMomentCount: d.sharedMomentCount,
         defensiveUsed: d.defensiveUsed,
+        defensivePreventable: d.defensivePreventable,
         externalHealer: d.externalHealer,
         externalAbility: d.externalAbility,
         deathNumber: d.deathNumber,
@@ -302,6 +398,7 @@ export function buildPlayerFeedback(analysis, playerNames) {
         durationClock: pull.durationClock,
         spec: parse.spec,
         rankPercent: parse.rankPercent,
+        role: parse.role,
       });
     }
 
@@ -344,6 +441,11 @@ export function buildPlayerFeedback(analysis, playerNames) {
           bossName: pull.bossName,
         });
       } else if (classified.type === "defensive") {
+        // Rotational resource spenders (Death Strike) still count toward "did they have
+        // something up when they died," just not toward this raw per-ability usage list —
+        // otherwise a Blood DK's Death Strike buries every real cooldown pop. See
+        // ROTATIONAL_DEFENSIVE_NAMES in defensives.js.
+        if (!classified.countsTowardUsageStats) continue;
         const key = `${c.sourceName}::${c.abilityName}`;
         const entry = defensiveCounts.get(key) ?? {
           characterName: c.sourceName,
@@ -379,6 +481,8 @@ export function buildPlayerFeedback(analysis, playerNames) {
     firstPrepCheck && lastPrepCheck
       ? firstPrepCheck.missingEnchantSlots.filter((slot) => lastPrepCheck.missingEnchantSlots.includes(slot))
       : [];
+  const missingPrimaryStatGem =
+    firstPrepCheck && lastPrepCheck ? !firstPrepCheck.hasPrimaryStatGem && !lastPrepCheck.hasPrimaryStatGem : false;
 
   return {
     title: analysis.title,
@@ -396,8 +500,12 @@ export function buildPlayerFeedback(analysis, playerNames) {
     consumables: consumablesUsed,
     defensivesUsed: [...defensiveCounts.values()],
     externalsGiven,
+    orbCarryCount,
+    digInAlignmentCount,
+    feastSoakCount,
     prepCheck: {
       missingEnchantSlots,
+      missingPrimaryStatGem,
       missingFlaskPulls,
       missingFoodPulls,
       missingWeaponEnchantPulls,
@@ -415,6 +523,9 @@ export function buildPlayerFeedback(analysis, playerNames) {
       othersInterruptTotals: [...raidInterrupterTotals.entries()]
         .filter(([name]) => !nameSet.has(name))
         .map(([, count]) => count),
+      orbCarryCount,
+      feastSoakCount,
+      digInAlignmentCount,
     }),
   };
 }

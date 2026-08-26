@@ -8,6 +8,7 @@ import * as stopTrackingLiveCommand from "./commands/stopTrackingLive.js";
 import * as givePersonalFeedbackToAllCommand from "./commands/givePersonalFeedbackToAll.js";
 import * as listDefensivesCommand from "./commands/listDefensives.js";
 import * as requestDefensivesCommand from "./commands/requestDefensives.js";
+import * as checkHeroUpgradesCommand from "./commands/checkHeroUpgrades.js";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -21,6 +22,7 @@ for (const cmd of [
   givePersonalFeedbackToAllCommand,
   listDefensivesCommand,
   requestDefensivesCommand,
+  checkHeroUpgradesCommand,
 ]) {
   client.commands.set(cmd.data.name, cmd);
 }

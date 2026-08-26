@@ -93,7 +93,11 @@ function deathBlock(d) {
     lines.push(`  ${ANSI.cyan}💙 ${d.externalHealer} tried to save them with ${d.externalAbility}${ANSI.reset}`);
   }
   if (!d.defensiveUsed && !d.externalAbility) {
-    lines.push(`  ${ANSI.red}✗ no defensive used${ANSI.reset}`);
+    lines.push(
+      d.defensivePreventable
+        ? `  ${ANSI.red}✗ no defensive used${ANSI.reset}`
+        : `  ${ANSI.gray}(unavoidable — no defensive prevents this)${ANSI.reset}`
+    );
   }
 
   return lines.join("\n");
@@ -167,9 +171,10 @@ function formatPullList(pullNumbers) {
   return pullNumbers.map((n) => `#${n}`).join(", ");
 }
 
-function formatPrepIssues({ missingEnchantSlots, missingFlaskPulls, missingFoodPulls, missingWeaponEnchantPulls }) {
+function formatPrepIssues({ missingEnchantSlots, missingPrimaryStatGem, missingFlaskPulls, missingFoodPulls, missingWeaponEnchantPulls }) {
   const parts = [];
   if (missingEnchantSlots.length > 0) parts.push(`missing enchant: ${missingEnchantSlots.join(", ")}`);
+  if (missingPrimaryStatGem) parts.push(`no primary stat gem (Eversong Diamond)`);
   if (missingFlaskPulls.length > 0) parts.push(`no flask (Pull ${formatPullList(missingFlaskPulls)})`);
   if (missingFoodPulls.length > 0) parts.push(`no food (Pull ${formatPullList(missingFoodPulls)})`);
   if (missingWeaponEnchantPulls.length > 0) parts.push(`no weapon oil (Pull ${formatPullList(missingWeaponEnchantPulls)})`);
@@ -190,6 +195,30 @@ function addSummaryField(embed, name, list, formatter, { inline = true, caveat =
   let value = "```ansi\n" + list.map(formatter).join("\n") + "\n```";
   if (caveat) value += `\n*${caveat}*`;
   embed.addFields({ name, value, inline });
+}
+
+const HERO_UPGRADE_GOAL = 3;
+
+// lacking: [{ class, name, heroTrackMaxCount }] — everyone under the goal, already
+// filtered/sorted by the caller (checkHeroUpgrades.js). Empty means everyone's clear.
+export function buildHeroUpgradeCheckEmbed(lacking, reportTitle) {
+  const embed = new EmbedBuilder()
+    .setColor(lacking.length > 0 ? WIPE_COLOR : KILL_COLOR)
+    .setTitle(`💎 Hero 6/6 Upgrade Check — ${reportTitle}`)
+    .setDescription(`Goal: ${HERO_UPGRADE_GOAL} items at Hero 6/6 (ilvl 321).`);
+
+  if (lacking.length === 0) {
+    embed.addFields({ name: "Status", value: "✅ Everyone on the roster has hit the goal." });
+    return embed;
+  }
+
+  const lines = lacking.map((p) => summaryLine(p, `${p.heroTrackMaxCount}/${HERO_UPGRADE_GOAL}`, ANSI.red));
+  embed.addFields({
+    name: `Still short (${lacking.length})`,
+    value: "```ansi\n" + lines.join("\n") + "\n```",
+  });
+  embed.setFooter({ text: "Item-level proxy — can't confirm upgrades came from 3/6 specifically, see /summary caveats" });
+  return embed;
 }
 
 export function buildSummaryEmbed(summary) {
@@ -233,7 +262,7 @@ export function buildSummaryEmbed(summary) {
     (p) =>
       summaryLine(
         p,
-        `${Math.round((p.defensiveUsedCount / p.totalDeaths) * 100)}% of deaths (${p.totalDeaths} death${p.totalDeaths === 1 ? "" : "s"})`,
+        `${Math.round((p.defensiveUsedCount / p.judgeableDeaths) * 100)}% of deaths (${p.judgeableDeaths} death${p.judgeableDeaths === 1 ? "" : "s"})`,
         ANSI.red
       ),
     { caveat: "only counts what was up at the moment they died" }
@@ -248,8 +277,12 @@ export function buildSummaryEmbed(summary) {
     (p) => summaryLine(p, `0 across ${p.attendedPulls} pull${p.attendedPulls === 1 ? "" : "s"}`, ANSI.yellow),
     { caveat: "free parse left on the table" }
   );
-  addSummaryField(embed, "🛡️ Most Defensives Used", summary.mostDefensivesUsed, (p) =>
-    summaryLine(p, `${p.defensiveCastCount}x`, ANSI.green)
+  addSummaryField(
+    embed,
+    "🧴 Still Using Old Silvermoon Potion",
+    summary.usingOutdatedHealthPotion,
+    (p) => summaryLine(p, `${p.oldHealthPotionCount}x old, 0x new`, ANSI.yellow),
+    { caveat: "Concentrated Silvermoon Health Potion is a straight upgrade" }
   );
   addSummaryField(
     embed,
@@ -260,6 +293,25 @@ export function buildSummaryEmbed(summary) {
   );
   addSummaryField(embed, "💙 Most Externals Given", summary.mostExternalsGiven, (p) =>
     summaryLine(p, `${p.externalsGivenCount}x`, ANSI.cyan)
+  );
+  addSummaryField(
+    embed,
+    "🔥 Saved Bloodlust for Dig In (Sszorak)",
+    summary.mostDigInAlignments,
+    (p) => summaryLine(p, `${p.digInAlignmentCount}x`, ANSI.green),
+    { caveat: "landed a raid cooldown during the +30% damage window instead of on pull" }
+  );
+  addSummaryField(
+    embed,
+    "🟢 Most Orb Carries (Coiled Altar)",
+    summary.mostOrbCarries,
+    (p) => summaryLine(p, `${p.orbCarryCount}x carried`, ANSI.green)
+  );
+  addSummaryField(
+    embed,
+    "🍖 Most Feast Soaks (Twin Fangs)",
+    summary.mostFeastSoaks,
+    (p) => summaryLine(p, `${p.feastSoakCount}x soaked`, ANSI.green)
   );
   addSummaryField(
     embed,
@@ -292,7 +344,9 @@ function feedbackDeathLine(d) {
     ? `  ${ANSI.green}✓ used ${d.defensiveUsed}${ANSI.reset}`
     : d.externalAbility
     ? `  ${ANSI.cyan}💙 ${d.externalHealer} tried to save them with ${d.externalAbility}${ANSI.reset}`
-    : `  ${ANSI.red}✗ no defensive used${ANSI.reset}`;
+    : d.defensivePreventable
+    ? `  ${ANSI.red}✗ no defensive used${ANSI.reset}`
+    : `  ${ANSI.gray}(unavoidable — no defensive prevents this)${ANSI.reset}`;
   const pullTag = d.kill ? "Kill" : "Wipe";
   const sharedMomentNote =
     d.sharedMomentCount > 0
@@ -465,6 +519,14 @@ export function buildPlayerFeedbackEmbed(feedback) {
     embed.addFields({ name: `💙 Externals Given (${feedback.externalsGiven.length})`, value });
   } else {
     embed.addFields({ name: "💙 Externals Given", value: "None used all night" });
+  }
+
+  const bossMechanicLines = [];
+  if (feedback.orbCarryCount > 0) bossMechanicLines.push(`🟢 Orb Carries (Coiled Altar): ${feedback.orbCarryCount}x`);
+  if (feedback.feastSoakCount > 0) bossMechanicLines.push(`🍖 Feast Soaks (Twin Fangs): ${feedback.feastSoakCount}x`);
+  if (feedback.digInAlignmentCount > 0) bossMechanicLines.push(`🔥 Dig In Alignments (Sszorak): ${feedback.digInAlignmentCount}x`);
+  if (bossMechanicLines.length > 0) {
+    embed.addFields({ name: "⚙️ Boss Mechanic Engagement", value: bossMechanicLines.join("\n") });
   }
 
   const prepIssues = formatPrepIssues(feedback.prepCheck);

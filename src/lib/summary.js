@@ -1,20 +1,27 @@
-import { cappedDeathsForTally } from "./analyze.js";
-import { classifyCast } from "./defensives.js";
+import { cappedDeathsForTally, ORB_CARRY_BOSS_NAME, FEAST_SOAK_BOSS_NAME } from "./analyze.js";
+import { classifyCast, OUTDATED_HEALTH_POTION_NAME, UPGRADED_HEALTH_POTION_NAME } from "./defensives.js";
 
 function getPlayer(players, name, classHint) {
   if (!players.has(name)) {
     players.set(name, {
       name,
       class: classHint ?? null,
+      role: null, // "tank" | "healer" | "dps" — only known once we've seen a kill-pull ranking entry
       totalDeaths: 0,
       wipeTriggerCount: 0,
       wipeTriggerAbilities: [],
       defensiveUsedCount: 0,
       noDefensiveCount: 0,
+      judgeableDeaths: 0,
+      digInAlignmentCount: 0,
+      orbCarryCount: 0,
+      feastSoakCount: 0,
       parsePercents: [],
       interruptCount: 0,
       interruptViaPetCount: 0,
       dpsPotionCount: 0,
+      oldHealthPotionCount: 0,
+      newHealthPotionCount: 0,
       defensiveCastCount: 0,
       externalsGivenCount: 0,
       attendedPulls: 0,
@@ -68,12 +75,28 @@ export function buildNightSummary(analysis) {
         p.wipeTriggerCount += 1;
         p.wipeTriggerAbilities.push(d.killedBy);
       }
-      if (d.defensiveUsed) p.defensiveUsedCount += 1;
-      else p.noDefensiveCount += 1;
+      if (d.defensivePreventable) {
+        p.judgeableDeaths += 1;
+        if (d.defensiveUsed) p.defensiveUsedCount += 1;
+        else p.noDefensiveCount += 1;
+      }
+    }
+    if (pull.digInBloodlust) {
+      const p = getPlayer(players, pull.digInBloodlust.playerName, pull.digInBloodlust.playerClass);
+      p.digInAlignmentCount += 1;
+    }
+    for (const o of pull.orbCarries ?? []) {
+      const p = getPlayer(players, o.playerName, o.playerClass);
+      p.orbCarryCount += 1;
+    }
+    for (const f of pull.feastSoaks ?? []) {
+      const p = getPlayer(players, f.playerName, f.playerClass);
+      p.feastSoakCount += 1;
     }
     for (const parse of pull.allParses ?? []) {
       const p = getPlayer(players, parse.name, parse.class);
       p.parsePercents.push(parse.rankPercent);
+      if (parse.role) p.role = parse.role;
     }
     for (const i of pull.interrupts ?? []) {
       if (!i.sourceName) continue;
@@ -88,6 +111,10 @@ export function buildNightSummary(analysis) {
       const p = getPlayer(players, c.sourceName, c.sourceClass);
       if (classified.type === "consumable" && classified.category === "dps") {
         p.dpsPotionCount += 1;
+      } else if (classified.type === "consumable" && c.abilityName === OUTDATED_HEALTH_POTION_NAME) {
+        p.oldHealthPotionCount += 1;
+      } else if (classified.type === "consumable" && c.abilityName === UPGRADED_HEALTH_POTION_NAME) {
+        p.newHealthPotionCount += 1;
       } else if (classified.type === "defensive" && classified.countsTowardUsageStats) {
         p.defensiveCastCount += 1;
       } else if (classified.type === "external") {
@@ -133,6 +160,10 @@ export function buildNightSummary(analysis) {
       p.firstPrepCheck && p.lastPrepCheck
         ? p.firstPrepCheck.missingEnchantSlots.filter((slot) => p.lastPrepCheck.missingEnchantSlots.includes(slot))
         : [];
+    // Same first/last checkpoint logic as enchants — gems don't change mid-raid, but
+    // don't flag someone we only saw once (no real "still missing" comparison possible).
+    p.missingPrimaryStatGem =
+      p.firstPrepCheck && p.lastPrepCheck ? !p.firstPrepCheck.hasPrimaryStatGem && !p.lastPrepCheck.hasPrimaryStatGem : false;
     p.raidBuffLapses = [...p.missedClassBuffPulls.entries()].map(([buffName, pulls]) => ({ buffName, pulls }));
   }
 
@@ -143,34 +174,63 @@ export function buildNightSummary(analysis) {
   const highestAvgParse = [...withParses].sort((a, b) => b.avgParse - a.avgParse).slice(0, TOP_N);
   const lowestAvgParse = [...withParses].sort((a, b) => a.avgParse - b.avgParse).slice(0, TOP_N);
 
-  const withDeathSample = roster.filter((p) => p.totalDeaths >= MIN_DEATHS_FOR_DEFENSIVE_STATS);
-  const defensiveRate = (p) => p.defensiveUsedCount / p.totalDeaths;
+  // Denominator is judgeableDeaths, not totalDeaths — deaths to boss mechanics no
+  // defensive could have prevented (see DEFENSIVE_UNPREVENTABLE_DEATHS in analyze.js)
+  // are excluded so they don't drag down someone's rate for something out of their hands.
+  const withDeathSample = roster.filter((p) => p.judgeableDeaths >= MIN_DEATHS_FOR_DEFENSIVE_STATS);
+  const defensiveRate = (p) => p.defensiveUsedCount / p.judgeableDeaths;
   const diedWithNothingUp = [...withDeathSample]
     .filter((p) => defensiveRate(p) < 1)
     // Rate first, but a lot of nights everyone lands on the exact same 0% — break
     // ties by death count so it's not just an arbitrary ordering when that happens.
-    .sort((a, b) => defensiveRate(a) - defensiveRate(b) || b.totalDeaths - a.totalDeaths)
+    .sort((a, b) => defensiveRate(a) - defensiveRate(b) || b.judgeableDeaths - a.judgeableDeaths)
     .slice(0, TOP_N);
 
+  // DPS-role only — a healer or tank correctly never touching a DPS potion isn't
+  // "missing" anything, and role is unknown (null) for anyone who never appeared in
+  // a kill-pull ranking, so they're safely excluded rather than guessed at.
   const noDpsPotions = roster
-    .filter((p) => p.attendedPulls >= MIN_ATTENDED_PULLS_FOR_STAT && p.dpsPotionCount === 0)
+    .filter((p) => p.role === "dps" && p.attendedPulls >= MIN_ATTENDED_PULLS_FOR_STAT && p.dpsPotionCount === 0)
     .sort((a, b) => b.attendedPulls - a.attendedPulls)
     .slice(0, TOP_N);
 
-  const mostDefensivesUsed = topByKey(roster, "defensiveCastCount");
+  // Drank the old Silvermoon Health Potion at least once and never touched the
+  // upgraded Concentrated version — not a preference, a straight upgrade missed.
+  const usingOutdatedHealthPotion = roster
+    .filter((p) => p.oldHealthPotionCount > 0 && p.newHealthPotionCount === 0)
+    .sort((a, b) => b.oldHealthPotionCount - a.oldHealthPotionCount)
+    .slice(0, TOP_N);
+
   const leastDefensivesUsed = roster
     .filter((p) => p.attendedPulls >= MIN_ATTENDED_PULLS_FOR_STAT && p.defensiveCastCount === 0)
     .sort((a, b) => b.attendedPulls - a.attendedPulls)
     .slice(0, TOP_N);
   const mostExternalsGiven = topByKey(roster, "externalsGivenCount");
 
+  // Sszorak's Dig In burn window — good-play callout, no gate needed (only players
+  // who actually landed a raid cooldown in the window ever get a nonzero count).
+  const mostDigInAlignments = topByKey(roster, "digInAlignmentCount");
+
   const bossesSummary = [...bossStats.values()].sort((a, b) => a.firstPullNumber - b.firstPullNumber);
+
+  // Coiled Altar orb-carry good-play callout — only worth showing once the boss is
+  // actually down for the night; tallies every pull (wipes included), not just the kill.
+  const coiledAltarKilled = bossStats.get(ORB_CARRY_BOSS_NAME)?.killed ?? false;
+  const mostOrbCarries = coiledAltarKilled ? topByKey(roster, "orbCarryCount") : [];
+
+  // Same gate for Twin Fangs' Ravenous Feast soak participation.
+  const twinFangsKilled = bossStats.get(FEAST_SOAK_BOSS_NAME)?.killed ?? false;
+  const mostFeastSoaks = twinFangsKilled ? topByKey(roster, "feastSoakCount") : [];
 
   const missingPrep = roster
     .map((p) => ({
       ...p,
       prepIssueScore:
-        p.missingEnchantSlots.length + p.missingFlaskPulls.length + p.missingFoodPulls.length + p.missingWeaponEnchantPulls.length,
+        p.missingEnchantSlots.length +
+        p.missingFlaskPulls.length +
+        p.missingFoodPulls.length +
+        p.missingWeaponEnchantPulls.length +
+        (p.missingPrimaryStatGem ? 1 : 0),
     }))
     .filter((p) => p.prepIssueScore > 0)
     .sort((a, b) => b.prepIssueScore - a.prepIssueScore)
@@ -198,9 +258,12 @@ export function buildNightSummary(analysis) {
     diedWithNothingUp,
     mostInterrupts: topByKey(roster, "interruptCount"),
     noDpsPotions,
-    mostDefensivesUsed,
+    usingOutdatedHealthPotion,
     leastDefensivesUsed,
     mostExternalsGiven,
+    mostDigInAlignments,
+    mostOrbCarries,
+    mostFeastSoaks,
     missingPrep,
     raidBuffLapses,
   };

@@ -5,6 +5,36 @@
 const FLASK_NAME_PATTERN = /^Flask of/i;
 const FOOD_NAME_PATTERN = /Well Fed/i;
 
+// Midnight S2's Hero gear track tops out at 6/6 = item level 321. WCL's gear data
+// only gives itemLevel (no explicit track/rank label), and Hero 6/6 sits right at
+// the boundary where early Myth-track ranks land on the same item level — so a
+// Myth-upgraded piece that happens to also be ilvl 321 would get miscounted here.
+// Best-effort proxy, not exact — verify against a real report before trusting it.
+const HERO_TRACK_MAX_ITEM_LEVEL = 321;
+
+// How many equipped items are sitting at Hero 6/6 — a proxy for "did they spend
+// today's 180 crests upgrading 3 items to max," per the raid-day prep checklist.
+// Can't actually confirm they started from 3/6 rather than lower (cheaper) or that
+// it happened today rather than gearing built up over time — just a headcount.
+export function countHeroTrackMaxItems(gear) {
+  return gear.filter((item) => item && item.itemLevel === HERO_TRACK_MAX_ITEM_LEVEL).length;
+}
+
+// Eversong Diamond — Midnight's unique-equip prismatic gem, grants a primary stat
+// bonus (Str/Agi/Int, adapts to the wearer) and is the correct socket choice for
+// essentially every spec over the secondary-stat colored gems. Unique-equip, so at
+// most one is ever socketed — comes in four named crafted variants, each at two item
+// level tiers. WCL's CombatantInfo gear payload only gives gem item IDs, not names,
+// so this has to match by ID rather than a name pattern like flask/food above.
+// UNVERIFIED against this server's real gear data — Stoic (295) and Telluric (278)
+// item IDs weren't confirmed, and the whole list needs checking against a real report.
+const EVERSONG_DIAMOND_ITEM_IDS = new Set([
+  240982, 240983, // Indecipherable (278 / 295)
+  240966, 240967, // Powerful (278 / 295)
+  240970, // Stoic (278) — 295 variant not yet confirmed
+  240969, // Telluric (295) — 278 variant not yet confirmed
+]);
+
 // Enchantable gear slots, matching CombatantInfo's gear array order (0-indexed,
 // mirrors Blizzard's inventory slot order). This is NOT the standard retail-WoW
 // slot list — verified against real gear data from this server first: wrist, hands,
@@ -37,6 +67,12 @@ export function hasWeaponEnchant(gear) {
   const weapons = WEAPON_SLOTS.map((i) => gear[i]).filter((g) => g && g.id !== 0);
   if (weapons.length === 0) return true;
   return weapons.some((g) => g.temporaryEnchant != null);
+}
+
+// True if any socketed gem across all gear is an Eversong Diamond variant. Unique-
+// equip means there's at most one to find, in whichever slot got socketed.
+export function hasPrimaryStatGem(gear) {
+  return gear.some((item) => (item?.gems ?? []).some((g) => EVERSONG_DIAMOND_ITEM_IDS.has(g.id)));
 }
 
 // Enchantable slots with an item equipped but no permanent enchant on it. Empty
