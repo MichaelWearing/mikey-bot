@@ -1,5 +1,12 @@
 [
-  { "names": ["Wygzy"], "channelName": "nygzy", "characters": [{ "name": "Wygzy", "class": "Warlock", "spec": "Demonology" }] },
+  {
+    "names": ["Wygzy", "Nygzy"],
+    "channelName": "nygzy",
+    "characters": [
+      { "name": "Wygzy", "class": "Warlock", "spec": "Demonology" },
+      { "name": "Nygzy", "class": "Druid", "spec": "Balance" }
+    ]
+  },
   {
     "names": ["Mikey", "Rambomikey"],
     "channelName": "mikey",
@@ -21,9 +28,23 @@
   { "names": ["Lutziehdk"], "channelName": "lucy", "characters": [{ "name": "Lutziehdk", "class": "DeathKnight", "spec": "Unholy" }] },
   { "names": ["Thronehobo"], "channelName": "throne", "characters": [{ "name": "Thronehobo", "class": "Shaman", "spec": "Elemental" }] },
   { "names": ["Öc"], "channelName": "oc", "characters": [{ "name": "Öc", "class": "Warrior", "spec": "Fury" }] },
-  { "names": ["Krepowl"], "channelName": "krepo", "characters": [{ "name": "Krepowl", "class": "Druid", "spec": "Balance" }] },
-  { "names": ["Nèèko"], "channelName": "neeko", "characters": [{ "name": "Nèèko", "class": "Paladin", "spec": "Retribution" }] },
-  { "names": ["Pàzdh"], "channelName": "paz", "characters": [{ "name": "Pàzdh", "class": "DemonHunter", "spec": "Devourer" }] },
+  {
+    "names": ["Krepowl", "Krelemental"],
+    "channelName": "krepo",
+    "characters": [
+      { "name": "Krepowl", "class": "Druid", "spec": "Balance" },
+      { "name": "Krelemental", "class": "Shaman", "spec": "Elemental" }
+    ]
+  },
+  { "names": ["Nèèko"], "channelName": "neeko", "characters": [{ "name": "Nèèko", "class": "Paladin", "spec": "Protection" }] },
+  {
+    "names": ["Páz", "Pàzdh"],
+    "channelName": "paz",
+    "characters": [
+      { "name": "Páz", "class": "Mage", "spec": "Arcane" },
+      { "name": "Pàzdh", "class": "DemonHunter", "spec": "Devourer" }
+    ]
+  },
   {
     "names": ["Katawoke", "Kataxy", "Katashame", "Kataqtx"],
     "channelName": "kata",
@@ -39,7 +60,14 @@
   { "names": ["Capitanfade"], "channelName": "fade", "characters": [{ "name": "Capitanfade", "class": "Mage", "spec": "Frost" }] },
   { "names": ["Goilien"], "channelName": "goilen", "characters": [{ "name": "Goilien", "class": "Shaman", "spec": "Restoration" }] },
   { "names": ["Deadnavia"], "channelName": "anavia", "characters": [{ "name": "Deadnavia", "class": "DeathKnight", "spec": "Frost" }] },
-  { "names": ["Topkek"], "channelName": "tonthick", "characters": [{ "name": "Topkek", "class": "Hunter", "spec": "Marksmanship" }] },
+  {
+    "names": ["Topkek", "Mnomquah"],
+    "channelName": "tonthick",
+    "characters": [
+      { "name": "Topkek", "class": "Hunter", "spec": "Marksmanship" },
+      { "name": "Mnomquah", "class": "Shaman", "spec": "Enhancement" }
+    ]
+  },
   { "names": ["Mammy"], "channelName": "mammy", "characters": [{ "name": "Mammy", "class": "Priest", "spec": "Holy" }] },
   {
     "names": ["Saphirá", "Mýsterý"],
@@ -62,5 +90,6 @@
   },
   { "names": ["Scarsofdeath"], "channelName": "scars", "characters": [{ "name": "Scarsofdeath", "class": "DeathKnight", "spec": "Frost" }] },
   { "names": ["Donnybrasco"], "channelName": "ali", "characters": [{ "name": "Donnybrasco", "class": "Warrior", "spec": "Arms" }] },
-  { "names": ["Getgnømed"], "channelName": "gnome", "characters": [{ "name": "Getgnømed", "class": "DemonHunter", "spec": "Havoc" }] }
+  { "names": ["Getgnømed"], "channelName": "gnome", "characters": [{ "name": "Getgnømed", "class": "DemonHunter", "spec": "Havoc" }] },
+  { "names": ["Yúpidk"], "channelName": "yupi", "characters": [{ "name": "Yúpidk", "class": "DeathKnight", "spec": "Blood" }] }
 ]
