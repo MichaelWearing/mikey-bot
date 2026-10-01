@@ -9,6 +9,15 @@ import * as givePersonalFeedbackToAllCommand from "./commands/givePersonalFeedba
 import * as listDefensivesCommand from "./commands/listDefensives.js";
 import * as requestDefensivesCommand from "./commands/requestDefensives.js";
 import * as checkHeroUpgradesCommand from "./commands/checkHeroUpgrades.js";
+import * as trashDamageCommand from "./commands/trashDamage.js";
+import * as padCommand from "./commands/pad.js";
+import * as requestPadCheckCommand from "./commands/requestPadCheck.js";
+import * as requestBotFeedbackCommand from "./commands/requestBotFeedback.js";
+import * as twinFangKicksCommand from "./commands/twinFangKicks.js";
+import * as twinFangWavesCommand from "./commands/twinFangWaves.js";
+import * as twinFangOrbsCommand from "./commands/twinFangOrbs.js";
+import * as twinFangOrbsPostCommand from "./commands/twinFangOrbsPost.js";
+import * as coiledAltarOrbsCommand from "./commands/coiledAltarOrbs.js";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -23,6 +32,15 @@ for (const cmd of [
   listDefensivesCommand,
   requestDefensivesCommand,
   checkHeroUpgradesCommand,
+  trashDamageCommand,
+  padCommand,
+  requestPadCheckCommand,
+  requestBotFeedbackCommand,
+  twinFangKicksCommand,
+  twinFangWavesCommand,
+  twinFangOrbsCommand,
+  twinFangOrbsPostCommand,
+  coiledAltarOrbsCommand,
 ]) {
   client.commands.set(cmd.data.name, cmd);
 }

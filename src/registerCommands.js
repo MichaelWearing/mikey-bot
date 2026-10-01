@@ -9,6 +9,15 @@ import * as givePersonalFeedbackToAllCommand from "./commands/givePersonalFeedba
 import * as listDefensivesCommand from "./commands/listDefensives.js";
 import * as requestDefensivesCommand from "./commands/requestDefensives.js";
 import * as checkHeroUpgradesCommand from "./commands/checkHeroUpgrades.js";
+import * as trashDamageCommand from "./commands/trashDamage.js";
+import * as padCommand from "./commands/pad.js";
+import * as requestPadCheckCommand from "./commands/requestPadCheck.js";
+import * as requestBotFeedbackCommand from "./commands/requestBotFeedback.js";
+import * as twinFangKicksCommand from "./commands/twinFangKicks.js";
+import * as twinFangWavesCommand from "./commands/twinFangWaves.js";
+import * as twinFangOrbsCommand from "./commands/twinFangOrbs.js";
+import * as twinFangOrbsPostCommand from "./commands/twinFangOrbsPost.js";
+import * as coiledAltarOrbsCommand from "./commands/coiledAltarOrbs.js";
 
 const commands = [
   analyzeCommand.data.toJSON(),
@@ -20,6 +29,15 @@ const commands = [
   listDefensivesCommand.data.toJSON(),
   requestDefensivesCommand.data.toJSON(),
   checkHeroUpgradesCommand.data.toJSON(),
+  trashDamageCommand.data.toJSON(),
+  padCommand.data.toJSON(),
+  requestPadCheckCommand.data.toJSON(),
+  requestBotFeedbackCommand.data.toJSON(),
+  twinFangKicksCommand.data.toJSON(),
+  twinFangWavesCommand.data.toJSON(),
+  twinFangOrbsCommand.data.toJSON(),
+  twinFangOrbsPostCommand.data.toJSON(),
+  coiledAltarOrbsCommand.data.toJSON(),
 ];
 
 const rest = new REST().setToken(process.env.DISCORD_BOT_TOKEN);
