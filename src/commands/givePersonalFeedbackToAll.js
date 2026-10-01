@@ -1,9 +1,10 @@
 import { SlashCommandBuilder } from "discord.js";
 import { analyzeReport } from "../lib/analyze.js";
+import { analyzeTrash } from "../lib/trash.js";
 import { buildPlayerFeedback } from "../lib/playerFeedback.js";
 import { buildPlayerFeedbackEmbed } from "../lib/embeds.js";
 import { extractReportCode } from "../lib/reportCode.js";
-import { getRoster } from "../lib/roster.js";
+import { getRoster, buildSpecLookup } from "../lib/roster.js";
 
 export const data = new SlashCommandBuilder()
   .setName("give-personal-feedback-to-all")
@@ -39,12 +40,22 @@ export async function execute(interaction) {
     return;
   }
 
+  const specLookup = buildSpecLookup(roster);
+
+  // Trash standing is a nice-to-have — fetched once for the whole roster.
+  let trashRoster = null;
+  try {
+    trashRoster = (await analyzeTrash(code)).roster;
+  } catch (err) {
+    console.error("Couldn't analyze trash for feedback:", err);
+  }
+
   const posted = [];
   const skipped = [];
   const failed = [];
 
   for (const entry of roster) {
-    const feedback = buildPlayerFeedback(analysis, entry.names);
+    const feedback = buildPlayerFeedback(analysis, entry.names, specLookup, trashRoster);
     const hasData =
       feedback.deaths.length > 0 ||
       feedback.kills.length > 0 ||

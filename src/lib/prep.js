@@ -92,13 +92,17 @@ export function missingEnchantSlots(gear) {
 // every class provides one (Rogue/Hunter/Warlock/DK/DH/Monk didn't show up as a
 // source for any raid-wide buff in the sample), so this list is empirical, not
 // assumed from standard WoW class design.
+// Devotion Aura is deliberately NOT here — it's a range-limited passive aura, not a
+// cast-once raid buff, so a pull-start snapshot showing "1-3/20 missing" almost
+// always just means those players were briefly out of the paladin's ~40yd radius,
+// not that the paladin let anything lapse. We can't tell those apart, so flagging it
+// is ~always a false positive on the paladin (raider feedback from Nèèko).
 export const CLASS_BUFFS = {
   "Mark of the Wild": "Druid",
   "Arcane Intellect": "Mage",
   "Battle Shout": "Warrior",
   "Power Word: Fortitude": "Priest",
   Skyfury: "Shaman",
-  "Devotion Aura": "Paladin",
   "Blessing of the Bronze": "Evoker",
 };
 
